@@ -1,3 +1,6 @@
+const STORAGE_WALLETS = 'wallets';
+const STORAGE_CURRENT_WALLET = 'currentWalletId';
+const DEFAULT_WALLET_NAME = 'Alap';
 const defaultCategories = [
     { name: '🍕 Étel', monthlyLimit: 14000 },
     { name: '🍺 Alkohol', monthlyLimit: 12000 },
@@ -8,31 +11,143 @@ const defaultCategories = [
     { name: '🦕 Szórakozás', monthlyLimit: 16000 },
     { name: '🍪 Édesség/Üdítő', monthlyLimit: 6000 }
 ];
+const categoryAliases = {
+    '🍪 Édesség': '🍪 Édesség/Üdítő'
+};
 
-function loadCategories() {
+function generateId() {
+    return `w_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeCategories(list) {
+    if (!Array.isArray(list)) { return []; }
+    return list.map(item => {
+        const monthlyRaw = parseInt(item.monthlyLimit, 10);
+        const weeklyRaw = parseInt(item.weeklyLimit, 10);
+        const legacyRaw = parseInt(item.limit, 10);
+        const monthlyLimit = Number.isFinite(monthlyRaw)
+            ? monthlyRaw
+            : (Number.isFinite(weeklyRaw) ? weeklyRaw * 4 : (Number.isFinite(legacyRaw) ? legacyRaw * 4 : 0));
+        return { name: item.name, monthlyLimit };
+    }).filter(item => item.name);
+}
+
+function loadLegacyCategories() {
     const saved = JSON.parse(localStorage.getItem('categories'));
     if (Array.isArray(saved) && saved.length) {
-        return saved.map(item => {
-            const monthlyRaw = parseInt(item.monthlyLimit, 10);
-            const weeklyRaw = parseInt(item.weeklyLimit, 10);
-            const legacyRaw = parseInt(item.limit, 10);
-            const monthlyLimit = Number.isFinite(monthlyRaw)
-                ? monthlyRaw
-                : (Number.isFinite(weeklyRaw) ? weeklyRaw * 4 : (Number.isFinite(legacyRaw) ? legacyRaw * 4 : 0));
-            return { name: item.name, monthlyLimit };
-        });
+        return normalizeCategories(saved);
     }
     if (saved && typeof saved === 'object') {
         return Object.keys(saved).map(name => {
             const legacy = parseInt(saved[name], 10);
             return { name, monthlyLimit: Number.isFinite(legacy) ? legacy * 4 : 0 };
-        });
+        }).filter(item => item.name);
     }
-    return defaultCategories;
+    return defaultCategories.map(cat => ({ ...cat }));
 }
 
-function saveCategories() {
-    localStorage.setItem('categories', JSON.stringify(categories));
+function normalizeExpenses(expenses) {
+    let changed = false;
+    const normalized = (Array.isArray(expenses) ? expenses : []).map(item => {
+        const nextCat = categoryAliases[item.cat];
+        if (nextCat && nextCat !== item.cat) {
+            changed = true;
+            return { ...item, cat: nextCat };
+        }
+        return item;
+    });
+    return { normalized, changed };
+}
+
+function normalizeWallet(raw) {
+    const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : DEFAULT_WALLET_NAME;
+    const id = raw.id || generateId();
+    const categories = normalizeCategories(raw.categories || []);
+    const fallbackCategories = categories.length ? categories : defaultCategories.map(cat => ({ ...cat }));
+    const expensesRaw = Array.isArray(raw.expenses) ? raw.expenses : [];
+    const { normalized, changed } = normalizeExpenses(expensesRaw);
+    return { wallet: { id, name, categories: fallbackCategories, expenses: normalized }, changed };
+}
+
+function loadWallets() {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_WALLETS));
+    if (Array.isArray(saved) && saved.length) {
+        let changed = false;
+        const wallets = saved.map(raw => {
+            const result = normalizeWallet(raw);
+            if (result.changed) { changed = true; }
+            return result.wallet;
+        });
+        if (changed) {
+            localStorage.setItem(STORAGE_WALLETS, JSON.stringify(wallets));
+        }
+        return wallets;
+    }
+    const legacyCategories = loadLegacyCategories();
+    const legacyExpenses = JSON.parse(localStorage.getItem('expenses')) || [];
+    const result = normalizeWallet({
+        id: generateId(),
+        name: DEFAULT_WALLET_NAME,
+        categories: legacyCategories,
+        expenses: legacyExpenses
+    });
+    const wallets = [result.wallet];
+    localStorage.setItem(STORAGE_WALLETS, JSON.stringify(wallets));
+    localStorage.setItem(STORAGE_CURRENT_WALLET, wallets[0].id);
+    return wallets;
+}
+
+function loadCurrentWalletId(wallets) {
+    const savedId = localStorage.getItem(STORAGE_CURRENT_WALLET);
+    if (savedId && wallets.some(wallet => wallet.id === savedId)) {
+        return savedId;
+    }
+    const fallback = wallets[0]?.id;
+    if (fallback) {
+        localStorage.setItem(STORAGE_CURRENT_WALLET, fallback);
+    }
+    return fallback;
+}
+
+function persistWallets() {
+    localStorage.setItem(STORAGE_WALLETS, JSON.stringify(wallets));
+}
+
+function getCurrentWallet() {
+    return wallets.find(wallet => wallet.id === currentWalletId) || wallets[0];
+}
+
+function updateCurrentWallet() {
+    currentWallet = getCurrentWallet();
+    if (!currentWallet) { return; }
+    categories = currentWallet.categories;
+    data = currentWallet.expenses;
+}
+
+let wallets = loadWallets();
+let currentWalletId = loadCurrentWalletId(wallets);
+let currentWallet = null;
+let categories = [];
+let data = [];
+
+function renderWalletSelect() {
+    const select = document.getElementById('wallet-select');
+    if (!select) { return; }
+    select.innerHTML = '';
+    wallets.forEach(wallet => {
+        const option = document.createElement('option');
+        option.value = wallet.id;
+        option.textContent = wallet.name;
+        select.appendChild(option);
+    });
+    select.value = currentWalletId;
+}
+
+function setCurrentWallet(id) {
+    if (!wallets.some(wallet => wallet.id === id)) { return; }
+    currentWalletId = id;
+    localStorage.setItem(STORAGE_CURRENT_WALLET, id);
+    renderAll();
 }
 
 function formatLocalDate(date) {
@@ -60,24 +175,6 @@ function getMonthRange(today) {
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return { start, end };
-}
-
-let categories = loadCategories();
-let data = JSON.parse(localStorage.getItem('expenses')) || [];
-const categoryAliases = {
-    '🍪 Édesség': '🍪 Édesség/Üdítő'
-};
-let dataChanged = false;
-data = data.map(item => {
-    const nextCat = categoryAliases[item.cat];
-    if (nextCat && nextCat !== item.cat) {
-        dataChanged = true;
-        return { ...item, cat: nextCat };
-    }
-    return item;
-});
-if (dataChanged) {
-    localStorage.setItem('expenses', JSON.stringify(data));
 }
 
 function filterData(range) {
@@ -181,6 +278,7 @@ function updateSettingsTotal() {
 }
 
 function renderAll() {
+    updateCurrentWallet();
     const today = new Date();
     const weekRange = getWeekRange(today);
     const monthRange = getMonthRange(today);
@@ -191,9 +289,11 @@ function renderAll() {
     renderMonthTable(monthRange);
     renderCategorySelect();
     renderSettings();
+    renderWalletSelect();
 }
 
 function addExpense() {
+    updateCurrentWallet();
     const amountField = document.getElementById('amount');
     const categoryField = document.getElementById('category-select');
     const noteField = document.getElementById('note');
@@ -202,8 +302,8 @@ function addExpense() {
     const cat = categoryField.value;
     if (!cat) { alert("Válassz kategóriát!"); return; }
     const note = noteField.value.trim();
-    data.push({ date: formatLocalDate(new Date()), cat, amount, note });
-    localStorage.setItem('expenses', JSON.stringify(data));
+    currentWallet.expenses.push({ date: formatLocalDate(new Date()), cat, amount, note });
+    persistWallets();
     amountField.value = '';
     noteField.value = '';
     categoryField.selectedIndex = 0;
@@ -226,7 +326,31 @@ function setupExpenseForm() {
     });
 }
 
+function setupWalletSelect() {
+    const select = document.getElementById('wallet-select');
+    if (!select) { return; }
+    select.addEventListener('change', () => setCurrentWallet(select.value));
+}
+
+function addWallet() {
+    updateCurrentWallet();
+    const nameField = document.getElementById('new-wallet-name');
+    const name = nameField.value.trim();
+    if (!name) { alert("Add meg a tárca nevét!"); return; }
+    if (wallets.some(wallet => wallet.name.toLowerCase() === name.toLowerCase())) {
+        alert("Ez a tárca már létezik.");
+        return;
+    }
+    const baseCategories = (categories.length ? categories : defaultCategories).map(cat => ({ ...cat }));
+    const wallet = { id: generateId(), name, categories: baseCategories, expenses: [] };
+    wallets.push(wallet);
+    persistWallets();
+    nameField.value = '';
+    setCurrentWallet(wallet.id);
+}
+
 function addCategory() {
+    updateCurrentWallet();
     const nameField = document.getElementById('new-cat-name');
     const monthlyField = document.getElementById('new-cat-monthly');
     const name = nameField.value.trim();
@@ -234,14 +358,15 @@ function addCategory() {
     if (!name) { alert("Add meg a kategória nevét!"); return; }
     if (isNaN(monthlyLimit)) { alert("Add meg a havi limitet!"); return; }
     if (categories.some(cat => cat.name === name)) { alert("Ez a kategória már létezik."); return; }
-    categories.push({ name, monthlyLimit });
-    saveCategories();
+    currentWallet.categories.push({ name, monthlyLimit });
+    persistWallets();
     nameField.value = '';
     monthlyField.value = '';
     renderAll();
 }
 
 function saveSettings() {
+    updateCurrentWallet();
     let invalid = false;
     const updated = categories.map((cat, index) => {
         const monthlyInput = document.querySelector(`#settings-list input[data-index="${index}"][data-type="monthly"]`);
@@ -255,8 +380,9 @@ function saveSettings() {
         };
     });
     if (invalid) { alert("Minden kategóriához adj meg havi limitet."); return; }
+    currentWallet.categories = updated;
     categories = updated;
-    saveCategories();
+    persistWallets();
     renderAll();
     alert("Beállítások mentve.");
 }
@@ -279,6 +405,7 @@ function resolveAcc(note) {
 }
 
 function exportCSV() {
+    updateCurrentWallet();
     let csv = "Category,Amount,Description,Date,Acc\n" + data.map(i => {
         const note = i.note || '';
         return [
@@ -349,6 +476,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 setupExpenseForm();
+setupWalletSelect();
 const initialView = location.hash.replace('#', '');
 switchView(initialView);
 renderAll();

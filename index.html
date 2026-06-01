@@ -7,7 +7,10 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dark-mode">
-    <h2>Költségkövető</h2>
+    <div class="header">
+        <h2>Költségkövető</h2>
+        <select id="wallet-select" class="wallet-select"></select>
+    </div>
     <section id="view-week" class="view active">
         <h3>Heti maradvány</h3>
         <div id="week-label" class="period-label"></div>
@@ -58,6 +61,11 @@
             <input type="text" id="new-cat-name" placeholder="Új kategória (pl. 🍞 Pékáru)">
             <input type="number" id="new-cat-monthly" placeholder="Havi limit (Ft)">
             <button class="action-btn" onclick="addCategory()">Kategória hozzáadása</button>
+        </div>
+        <div class="card stack" style="margin-top:12px;">
+            <strong>Új tárca</strong>
+            <input type="text" id="new-wallet-name" placeholder="Új tárca neve (pl. Utazás)">
+            <button class="action-btn" onclick="addWallet()">Tárca létrehozása</button>
         </div>
         <button class="action-btn" style="margin-top:10px;" onclick="saveSettings()">Beállítások mentése</button>
     </section>

@@ -5,6 +5,9 @@
     --bg: #121212; --card: #1e1e1e; --text: #e0e0e0;
 }
 body { font-family: sans-serif; padding: 10px 10px calc(90px + env(safe-area-inset-bottom)); background: var(--bg); color: var(--text); max-width: 500px; margin: auto; transition: 0.3s; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.header h2 { margin: 0; font-size: 20px; }
+.wallet-select { width: 150px; padding: 10px; }
 .card { background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 .cat-btn { padding: 15px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; font-size: 14px; }
