@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Költségkövető</title>
+    <style>
+        body { font-family: sans-serif; padding: 15px; background: #f4f4f9; max-width: 500px; margin: auto; }
+        .card { background: white; padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .bar-bg { background: #eee; height: 10px; border-radius: 5px; margin-top: 5px; overflow: hidden; }
+        .bar-fill { height: 100%; background: #5cb85c; }
+        .negative { background: #d9534f; }
+        .add-btn { background: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 16px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>Heti keret maradvány</h2>
+    <div id="stats"></div>
+    <button class="add-btn" onclick="addExpense()">+ Új kiadás</button>
+    <button onclick="exportCSV()" style="width:100%; margin-top:10px;">CSV Export</button>
+
+    <script>
+        const categories = {
+            '🛒 Bevásárlás': 6000, '🍕 Étel': 3500, '🍺 Alkohol': 3000, 
+            '🍪 Édesség': 1500, '🦕 Szórakozás': 4000, '🐸 Tisztálkodás': 1500,
+            '🚌 Közlekedés': 700, '✨ Egyéb': 3000
+        };
+
+        let data = JSON.parse(localStorage.getItem('expenses')) || [];
+
+        function render() {
+            const stats = document.getElementById('stats');
+            stats.innerHTML = '';
+            
+            for (let cat in categories) {
+                const spent = data.filter(i => i.cat === cat).reduce((sum, i) => sum + parseInt(i.amount), 0);
+                const remaining = categories[cat] - spent;
+                const percent = Math.min((spent / categories[cat]) * 100, 100);
+                
+                stats.innerHTML += `
+                    <div class="card">
+                        <strong>${cat}</strong>: ${remaining} Ft maradt
+                        <div class="bar-bg"><div class="bar-fill ${remaining < 0 ? 'negative' : ''}" style="width: ${percent}%"></div></div>
+                    </div>`;
+            }
+        }
+
+        function addExpense() {
+            const cat = prompt("Kategória (pl. 🛒 Bevásárlás):");
+            const amount = prompt("Összeg:");
+            if(cat && amount) {
+                data.push({date: new Date().toISOString().split('T')[0], cat, amount});
+                localStorage.setItem('expenses', JSON.stringify(data));
+                render();
+            }
+        }
+
+        function exportCSV() {
+            let csv = "Dátum,Kategória,Összeg\n" + data.map(i => `${i.date},${i.cat},${i.amount}`).join("\n");
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+            a.download = 'kiadasok.csv';
+            a.click();
+        }
+
+        render();
+    </script>
+</body>
+</html>
