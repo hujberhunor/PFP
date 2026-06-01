@@ -20,7 +20,8 @@
         .dark-mode .bar-bg { background: #333; }
         .bar-fill { height: 100%; background: #5cb85c; }
         .negative { background: #d9534f; }
-        input, select { background: var(--card); color: var(--text); border: 1px solid #777; padding: 15px; width: 100%; box-sizing: border-box; }
+        input, select { background: var(--card); color: var(--text); border: 1px solid #777; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; }
+        select { min-height: 48px; }
         .nav { display: flex; gap: 8px; margin-bottom: 12px; }
         .nav-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; }
         .dark-mode .nav-btn { background: #333; color: white; }
@@ -30,13 +31,18 @@
         .period-label { font-size: 12px; opacity: 0.8; margin-bottom: 6px; }
         .settings-header { display: flex; align-items: center; gap: 10px; font-size: 12px; opacity: 0.8; margin-bottom: 6px; }
         .settings-header .cat-name { flex: 1; }
-        .settings-header .limit-col { width: 100px; text-align: right; }
+        .settings-header .limit-col { width: 120px; text-align: right; }
         .settings-row { display: flex; align-items: center; gap: 10px; }
         .settings-row .cat-name { flex: 1; }
-        .settings-row input { width: 100px; }
+        .settings-row input { width: 120px; }
         .stack { display: flex; flex-direction: column; gap: 8px; }
         .action-btn { width: 100%; padding: 15px; border: none; border-radius: 8px; background: #5cb85c; color: white; cursor: pointer; }
         .dark-mode .action-btn { background: #4ea44e; }
+        .table-wrap { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .data-table th, .data-table td { padding: 6px; border-bottom: 1px solid #444; text-align: left; }
+        .data-table td { white-space: nowrap; }
+        .data-table td.desc { white-space: normal; }
     </style>
 </head>
 <body class="dark-mode">
@@ -66,20 +72,34 @@
         <h3>Havi maradvány</h3>
         <div id="month-label" class="period-label"></div>
         <div id="stats-month"></div>
+        <h3>Nyers adatok</h3>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Acc</th>
+                    </tr>
+                </thead>
+                <tbody id="month-raw"></tbody>
+            </table>
+        </div>
     </section>
 
     <section id="view-settings" class="view">
         <h3>Beállítások</h3>
         <div class="settings-header">
             <div class="cat-name">Kategória</div>
-            <div class="limit-col">Heti</div>
-            <div class="limit-col">Havi</div>
+            <div class="limit-col">Havi limit (Ft)</div>
         </div>
+        <div class="period-label">Heti limit automatikus a havi alapján.</div>
         <div id="settings-list"></div>
         <div class="card stack" style="margin-top:12px;">
             <strong>Új kategória</strong>
             <input type="text" id="new-cat-name" placeholder="Új kategória (pl. 🍞 Pékáru)">
-            <input type="number" id="new-cat-weekly" placeholder="Heti limit (Ft)">
             <input type="number" id="new-cat-monthly" placeholder="Havi limit (Ft)">
             <button class="action-btn" onclick="addCategory()">Kategória hozzáadása</button>
         </div>
@@ -88,35 +108,33 @@
 
     <script>
         const defaultCategories = [
-            { name: '🍕 Étel', weeklyLimit: 3500, monthlyLimit: 14000 },
-            { name: '🍺 Alkohol', weeklyLimit: 3000, monthlyLimit: 12000 },
-            { name: '✨ Egyéb', weeklyLimit: 3000, monthlyLimit: 12000 },
-            { name: '🐸 Tisztálkodás', weeklyLimit: 1500, monthlyLimit: 6000 },
-            { name: '🎁 Ajándék', weeklyLimit: 0, monthlyLimit: 0 },
-            { name: '🛒 Bevásárlás', weeklyLimit: 6000, monthlyLimit: 24000 },
-            { name: '🦕 Szórakozás', weeklyLimit: 4000, monthlyLimit: 16000 },
-            { name: '🍪 Édesség/Üdítő', weeklyLimit: 1500, monthlyLimit: 6000 }
+            { name: '🍕 Étel', monthlyLimit: 14000 },
+            { name: '🍺 Alkohol', monthlyLimit: 12000 },
+            { name: '✨ Egyéb', monthlyLimit: 12000 },
+            { name: '🐸 Tisztálkodás', monthlyLimit: 6000 },
+            { name: '🎁 Ajándék', monthlyLimit: 0 },
+            { name: '🛒 Bevásárlás', monthlyLimit: 24000 },
+            { name: '🦕 Szórakozás', monthlyLimit: 16000 },
+            { name: '🍪 Édesség/Üdítő', monthlyLimit: 6000 }
         ];
 
         function loadCategories() {
             const saved = JSON.parse(localStorage.getItem('categories'));
             if (Array.isArray(saved) && saved.length) {
                 return saved.map(item => {
-                    if ('weeklyLimit' in item || 'monthlyLimit' in item) {
-                        return {
-                            name: item.name,
-                            weeklyLimit: Number.isFinite(parseInt(item.weeklyLimit, 10)) ? parseInt(item.weeklyLimit, 10) : 0,
-                            monthlyLimit: Number.isFinite(parseInt(item.monthlyLimit, 10)) ? parseInt(item.monthlyLimit, 10) : 0
-                        };
-                    }
-                    const legacy = Number.isFinite(parseInt(item.limit, 10)) ? parseInt(item.limit, 10) : 0;
-                    return { name: item.name, weeklyLimit: legacy, monthlyLimit: legacy * 4 };
+                    const monthlyRaw = parseInt(item.monthlyLimit, 10);
+                    const weeklyRaw = parseInt(item.weeklyLimit, 10);
+                    const legacyRaw = parseInt(item.limit, 10);
+                    const monthlyLimit = Number.isFinite(monthlyRaw)
+                        ? monthlyRaw
+                        : (Number.isFinite(weeklyRaw) ? weeklyRaw * 4 : (Number.isFinite(legacyRaw) ? legacyRaw * 4 : 0));
+                    return { name: item.name, monthlyLimit };
                 });
             }
             if (saved && typeof saved === 'object') {
                 return Object.keys(saved).map(name => {
-                    const legacy = Number.isFinite(parseInt(saved[name], 10)) ? parseInt(saved[name], 10) : 0;
-                    return { name, weeklyLimit: legacy, monthlyLimit: legacy * 4 };
+                    const legacy = parseInt(saved[name], 10);
+                    return { name, monthlyLimit: Number.isFinite(legacy) ? legacy * 4 : 0 };
                 });
             }
             return defaultCategories;
@@ -178,7 +196,13 @@
             });
         }
 
-        function renderStats(containerId, range, limitKey) {
+        function getWeeklyLimit(monthRange, monthlyLimit) {
+            if (!monthlyLimit) { return 0; }
+            const daysInMonth = monthRange.end.getDate();
+            return Math.round((monthlyLimit / daysInMonth) * 7);
+        }
+
+        function renderStats(containerId, range, getLimit) {
             const stats = document.getElementById(containerId);
             stats.innerHTML = '';
             const filtered = filterData(range);
@@ -188,7 +212,7 @@
             }
             categories.forEach(cat => {
                 const spent = filtered.filter(i => i.cat === cat.name).reduce((sum, i) => sum + parseInt(i.amount, 10), 0);
-                const limit = cat[limitKey] || 0;
+                const limit = getLimit(cat);
                 const remaining = limit - spent;
                 const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
                 stats.innerHTML += `
@@ -238,12 +262,6 @@
                 const name = document.createElement('div');
                 name.className = 'cat-name';
                 name.textContent = cat.name;
-                const weeklyInput = document.createElement('input');
-                weeklyInput.type = 'number';
-                weeklyInput.min = '0';
-                weeklyInput.value = cat.weeklyLimit;
-                weeklyInput.dataset.index = index;
-                weeklyInput.dataset.type = 'weekly';
                 const monthlyInput = document.createElement('input');
                 monthlyInput.type = 'number';
                 monthlyInput.min = '0';
@@ -251,7 +269,6 @@
                 monthlyInput.dataset.index = index;
                 monthlyInput.dataset.type = 'monthly';
                 row.appendChild(name);
-                row.appendChild(weeklyInput);
                 row.appendChild(monthlyInput);
                 list.appendChild(row);
             });
@@ -263,8 +280,9 @@
             const monthRange = getMonthRange(today);
             document.getElementById('week-label').textContent = `${formatLocalDate(weekRange.start)} – ${formatLocalDate(weekRange.end)}`;
             document.getElementById('month-label').textContent = `${formatLocalDate(monthRange.start)} – ${formatLocalDate(monthRange.end)}`;
-            renderStats('stats-week', weekRange, 'weeklyLimit');
-            renderStats('stats-month', monthRange, 'monthlyLimit');
+            renderStats('stats-week', weekRange, cat => getWeeklyLimit(monthRange, cat.monthlyLimit));
+            renderStats('stats-month', monthRange, cat => cat.monthlyLimit || 0);
+            renderMonthTable(monthRange);
             renderCategorySelect();
             renderSettings();
         }
@@ -288,19 +306,15 @@
 
         function addCategory() {
             const nameField = document.getElementById('new-cat-name');
-            const weeklyField = document.getElementById('new-cat-weekly');
             const monthlyField = document.getElementById('new-cat-monthly');
             const name = nameField.value.trim();
-            const weeklyLimit = parseInt(weeklyField.value, 10);
             const monthlyLimit = parseInt(monthlyField.value, 10);
             if (!name) { alert("Add meg a kategória nevét!"); return; }
-            if (isNaN(weeklyLimit)) { alert("Add meg a heti limitet!"); return; }
             if (isNaN(monthlyLimit)) { alert("Add meg a havi limitet!"); return; }
             if (categories.some(cat => cat.name === name)) { alert("Ez a kategória már létezik."); return; }
-            categories.push({ name, weeklyLimit, monthlyLimit });
+            categories.push({ name, monthlyLimit });
             saveCategories();
             nameField.value = '';
-            weeklyField.value = '';
             monthlyField.value = '';
             renderAll();
         }
@@ -308,20 +322,17 @@
         function saveSettings() {
             let invalid = false;
             const updated = categories.map((cat, index) => {
-                const weeklyInput = document.querySelector(`#settings-list input[data-index="${index}"][data-type="weekly"]`);
                 const monthlyInput = document.querySelector(`#settings-list input[data-index="${index}"][data-type="monthly"]`);
-                const weeklyLimit = parseInt(weeklyInput.value, 10);
                 const monthlyLimit = parseInt(monthlyInput.value, 10);
-                if (isNaN(weeklyLimit) || isNaN(monthlyLimit)) {
+                if (isNaN(monthlyLimit)) {
                     invalid = true;
                 }
                 return {
                     ...cat,
-                    weeklyLimit: isNaN(weeklyLimit) ? 0 : weeklyLimit,
                     monthlyLimit: isNaN(monthlyLimit) ? 0 : monthlyLimit
                 };
             });
-            if (invalid) { alert("Minden kategóriához adj meg heti és havi limitet."); return; }
+            if (invalid) { alert("Minden kategóriához adj meg havi limitet."); return; }
             categories = updated;
             saveCategories();
             renderAll();
@@ -360,6 +371,41 @@
             a.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
             a.download = 'kiadasok.csv';
             a.click();
+        }
+
+        function renderMonthTable(range) {
+            const body = document.getElementById('month-raw');
+            body.innerHTML = '';
+            const filtered = filterData(range);
+            if (!filtered.length) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.textContent = 'Nincs adat.';
+                row.appendChild(cell);
+                body.appendChild(row);
+                return;
+            }
+            filtered.forEach(item => {
+                const row = document.createElement('tr');
+                const note = item.note || '';
+                const cells = [
+                    item.cat,
+                    item.amount,
+                    note,
+                    formatExportDate(item.date),
+                    resolveAcc(note)
+                ];
+                cells.forEach((value, index) => {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    if (index === 2) {
+                        cell.className = 'desc';
+                    }
+                    row.appendChild(cell);
+                });
+                body.appendChild(row);
+            });
         }
 
         function switchView(view) {
