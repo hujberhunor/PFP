@@ -59,12 +59,12 @@
         <div id="stats-week"></div>
 
         <h3>Új kiadás</h3>
-        <div class="stack" style="margin-top:10px;">
-            <input type="number" id="amount" placeholder="Összeg (Ft)">
+        <form id="expense-form" class="stack" style="margin-top:10px;">
+            <input type="number" id="amount" placeholder="Összeg (Ft)" inputmode="numeric" enterkeyhint="next">
             <select id="category-select"></select>
-            <input type="text" id="note" placeholder="Megjegyzés (pl. kifli, jegy, pizza)">
-            <button class="action-btn" onclick="addExpense()">Hozzáadás</button>
-        </div>
+            <input type="text" id="note" placeholder="Megjegyzés (pl. kifli, jegy, pizza)" enterkeyhint="done">
+            <button class="action-btn" type="submit">Hozzáadás</button>
+        </form>
         <button class="action-btn" style="margin-top:10px;" onclick="exportCSV()">CSV Export</button>
     </section>
 
@@ -311,6 +311,49 @@
             noteField.value = '';
             categoryField.selectedIndex = 0;
             renderAll();
+            amountField.focus();
+        }
+
+        function setupExpenseForm() {
+            const form = document.getElementById('expense-form');
+            const amountField = document.getElementById('amount');
+            const categoryField = document.getElementById('category-select');
+            const noteField = document.getElementById('note');
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                addExpense();
+            });
+
+            amountField.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (!categoryField.disabled) {
+                        categoryField.focus();
+                        if (typeof categoryField.showPicker === 'function') {
+                            categoryField.showPicker();
+                        }
+                    }
+                }
+            });
+
+            categoryField.addEventListener('change', () => {
+                noteField.focus();
+            });
+
+            categoryField.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    noteField.focus();
+                }
+            });
+
+            noteField.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addExpense();
+                }
+            });
         }
 
         function addCategory() {
@@ -435,6 +478,7 @@
             btn.addEventListener('click', () => switchView(btn.dataset.view));
         });
 
+        setupExpenseForm();
         const initialView = location.hash.replace('#', '');
         switchView(initialView);
         renderAll();
