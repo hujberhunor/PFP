@@ -194,7 +194,7 @@ function addExpense() {
     noteField.value = '';
     categoryField.selectedIndex = 0;
     renderAll();
-    amountField.focus();
+    categoryField.focus();
 }
 
 function setupExpenseForm() {
@@ -208,23 +208,18 @@ function setupExpenseForm() {
         addExpense();
     });
 
-    amountField.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            if (!categoryField.disabled) {
-                categoryField.focus();
-                if (typeof categoryField.showPicker === 'function') {
-                    categoryField.showPicker();
-                }
-            }
-        }
-    });
-
     categoryField.addEventListener('change', () => {
-        noteField.focus();
+        amountField.focus();
     });
 
     categoryField.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            amountField.focus();
+        }
+    });
+
+    amountField.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             noteField.focus();
