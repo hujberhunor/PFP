@@ -146,6 +146,7 @@ function renderSettings() {
     list.innerHTML = '';
     if (!categories.length) {
         list.innerHTML = '<div class="card">Nincs kategória. Adj hozzá újat lent.</div>';
+        updateSettingsTotal();
         return;
     }
     categories.forEach((cat, index) => {
@@ -160,10 +161,23 @@ function renderSettings() {
         monthlyInput.value = cat.monthlyLimit;
         monthlyInput.dataset.index = index;
         monthlyInput.dataset.type = 'monthly';
+        monthlyInput.addEventListener('input', updateSettingsTotal);
         row.appendChild(name);
         row.appendChild(monthlyInput);
         list.appendChild(row);
     });
+    updateSettingsTotal();
+}
+
+function updateSettingsTotal() {
+    const totalEl = document.getElementById('settings-total');
+    if (!totalEl) { return; }
+    const inputs = document.querySelectorAll('#settings-list input[data-type="monthly"]');
+    const total = Array.from(inputs).reduce((sum, input) => {
+        const value = parseInt(input.value, 10);
+        return sum + (isNaN(value) ? 0 : value);
+    }, 0);
+    totalEl.textContent = `Összes havi limit: ${total} Ft`;
 }
 
 function renderAll() {
@@ -201,7 +215,6 @@ function setupExpenseForm() {
     const form = document.getElementById('expense-form');
     const amountField = document.getElementById('amount');
     const categoryField = document.getElementById('category-select');
-    const noteField = document.getElementById('note');
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -210,27 +223,6 @@ function setupExpenseForm() {
 
     categoryField.addEventListener('change', () => {
         amountField.focus();
-    });
-
-    categoryField.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            amountField.focus();
-        }
-    });
-
-    amountField.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            noteField.focus();
-        }
-    });
-
-    noteField.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            addExpense();
-        }
     });
 }
 

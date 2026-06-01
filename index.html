@@ -16,8 +16,8 @@
         <h3>Új kiadás</h3>
         <form id="expense-form" class="stack" style="margin-top:10px;">
             <select id="category-select"></select>
-            <input type="number" id="amount" placeholder="Összeg (Ft)" inputmode="numeric" enterkeyhint="next">
-            <input type="text" id="note" placeholder="Megjegyzés (pl. kifli, jegy, pizza)" enterkeyhint="done">
+            <input type="number" id="amount" placeholder="Összeg (Ft)" inputmode="numeric">
+            <input type="text" id="note" placeholder="Megjegyzés (pl. kifli, jegy, pizza)">
             <button class="action-btn" type="submit">Hozzáadás</button>
         </form>
         <button class="action-btn" style="margin-top:10px;" onclick="exportCSV()">CSV Export</button>
@@ -52,6 +52,7 @@
         </div>
         <div class="period-label">Heti limit automatikus a havi alapján.</div>
         <div id="settings-list"></div>
+        <div id="settings-total" class="card">Összes havi limit: 0 Ft</div>
         <div class="card stack" style="margin-top:12px;">
             <strong>Új kategória</strong>
             <input type="text" id="new-cat-name" placeholder="Új kategória (pl. 🍞 Pékáru)">
