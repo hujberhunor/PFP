@@ -43,6 +43,11 @@
         .data-table th, .data-table td { padding: 6px; border-bottom: 1px solid #444; text-align: left; }
         .data-table td { white-space: nowrap; }
         .data-table td.desc { white-space: normal; }
+        #stats-week, #stats-month { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .stat-card { padding: 8px; margin-bottom: 0; }
+        .stat-card strong { display: block; font-size: 13px; }
+        .stat-remaining { font-size: 12px; }
+        .stat-card .bar-bg { height: 8px; margin-top: 4px; }
     </style>
 </head>
 <body class="dark-mode">
@@ -216,8 +221,9 @@
                 const remaining = limit - spent;
                 const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
                 stats.innerHTML += `
-                    <div class="card">
-                        <strong>${cat.name}</strong>: ${remaining} Ft maradt (limit: ${limit} Ft)
+                    <div class="card stat-card">
+                        <strong>${cat.name}</strong>
+                        <div class="stat-remaining">${remaining} Ft maradt</div>
                         <div class="bar-bg"><div class="bar-fill ${remaining < 0 ? 'negative' : ''}" style="width: ${percent}%"></div></div>
                     </div>`;
             });
