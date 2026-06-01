@@ -33,12 +33,32 @@
 
     <script>
         const categories = {
-            '🛒 Bevásárlás': 6000, '🍕 Étel': 3500, '🍺 Alkohol': 3000, 
-            '🍪 Édesség': 1500, '🦕 Szórakozás': 4000, '🐸 Tisztálkodás': 1500,
-            '🚌 Közlekedés': 700, '✨ Egyéb': 3000
+            '🍕 Étel': 3500,
+            '🍺 Alkohol': 3000,
+            '✨ Egyéb': 3000,
+            '🐸 Tisztálkodás': 1500,
+            '🎁 Ajándék': 0,
+            '🛒 Bevásárlás': 6000,
+            '🦕 Szórakozás': 4000,
+            '🍪 Édesség/Üdítő': 1500
         };
 
         let data = JSON.parse(localStorage.getItem('expenses')) || [];
+        const categoryAliases = {
+            '🍪 Édesség': '🍪 Édesség/Üdítő'
+        };
+        let dataChanged = false;
+        data = data.map(item => {
+            const nextCat = categoryAliases[item.cat];
+            if (nextCat && nextCat !== item.cat) {
+                dataChanged = true;
+                return { ...item, cat: nextCat };
+            }
+            return item;
+        });
+        if (dataChanged) {
+            localStorage.setItem('expenses', JSON.stringify(data));
+        }
 
         function render() {
             const stats = document.getElementById('stats');
