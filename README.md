@@ -1,4 +1,5 @@
 # Todo
+Valami normális és leiró név a reponak
 
 # UX
 Teljes telefon optimalizáció
