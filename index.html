@@ -11,7 +11,7 @@
         .dark-mode {
             --bg: #121212; --card: #1e1e1e; --text: #e0e0e0;
         }
-        body { font-family: sans-serif; padding: 10px; background: var(--bg); color: var(--text); max-width: 500px; margin: auto; transition: 0.3s; }
+        body { font-family: sans-serif; padding: 10px 10px calc(90px + env(safe-area-inset-bottom)); background: var(--bg); color: var(--text); max-width: 500px; margin: auto; transition: 0.3s; }
         .card { background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .cat-btn { padding: 15px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; font-size: 14px; }
@@ -22,8 +22,9 @@
         .negative { background: #d9534f; }
         input, select { background: var(--card); color: var(--text); border: 1px solid #777; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; }
         select { min-height: 48px; }
-        .nav { display: flex; gap: 8px; margin-bottom: 12px; }
-        .nav-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; }
+        .nav { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--bg); box-shadow: 0 -1px 3px rgba(0,0,0,0.3); }
+        .nav-inner { max-width: 500px; margin: 0 auto; display: flex; gap: 8px; }
+        .nav-btn { flex: 1; padding: 12px 8px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; min-height: 44px; }
         .dark-mode .nav-btn { background: #333; color: white; }
         .nav-btn.active { outline: 2px solid #5cb85c; }
         .view { display: none; }
@@ -52,12 +53,6 @@
 </head>
 <body class="dark-mode">
     <h2>Költségkövető</h2>
-    <div class="nav">
-        <button class="nav-btn active" data-view="week">Hét</button>
-        <button class="nav-btn" data-view="month">Hónap</button>
-        <button class="nav-btn" data-view="settings">Beállítások</button>
-    </div>
-
     <section id="view-week" class="view active">
         <h3>Heti maradvány</h3>
         <div id="week-label" class="period-label"></div>
@@ -110,6 +105,14 @@
         </div>
         <button class="action-btn" style="margin-top:10px;" onclick="saveSettings()">Beállítások mentése</button>
     </section>
+
+    <div class="nav">
+        <div class="nav-inner">
+            <button class="nav-btn active" data-view="week">Hét</button>
+            <button class="nav-btn" data-view="month">Hónap</button>
+            <button class="nav-btn" data-view="settings">Beállítások</button>
+        </div>
+    </div>
 
     <script>
         const defaultCategories = [
