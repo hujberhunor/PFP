@@ -5,20 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Költségkövető</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; background: #f4f4f9; max-width: 500px; margin: auto; }
-        .card { background: white; padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        :root {
+            --bg: #f4f4f9; --card: #ffffff; --text: #333;
+        }
+        .dark-mode {
+            --bg: #121212; --card: #1e1e1e; --text: #e0e0e0;
+        }
+        body { font-family: sans-serif; padding: 10px; background: var(--bg); color: var(--text); max-width: 500px; margin: auto; transition: 0.3s; }
+        .card { background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .cat-btn { padding: 15px; border: none; border-radius: 8px; background: #ddd; cursor: pointer; font-size: 14px; }
+        .dark-mode .cat-btn { background: #333; color: white; }
         .bar-bg { background: #eee; height: 10px; border-radius: 5px; margin-top: 5px; overflow: hidden; }
+        .dark-mode .bar-bg { background: #333; }
         .bar-fill { height: 100%; background: #5cb85c; }
         .negative { background: #d9534f; }
-        .add-btn { background: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 16px; margin-top: 20px; }
+        input { background: var(--card); color: var(--text); border: 1px solid #777; padding: 15px; width: 100%; box-sizing: border-box; }
     </style>
 </head>
-<body>
-
-    <h2>Heti keret maradvány</h2>
+<body class="dark-mode"> <h2>Heti maradvány</h2>
     <div id="stats"></div>
-    <button class="add-btn" onclick="addExpense()">+ Új kiadás</button>
-    <button onclick="exportCSV()" style="width:100%; margin-top:10px;">CSV Export</button>
+
+    <h3>Új kiadás</h3>
+    <input type="number" id="amount" placeholder="Összeg (Ft)">
+    <div class="grid" id="cat-grid" style="margin-top:10px;"></div>
+    <button onclick="exportCSV()" style="width:100%; padding:15px; border:none; border-radius:5px;">CSV Export</button>
 
     <script>
         const categories = {
@@ -32,12 +43,10 @@
         function render() {
             const stats = document.getElementById('stats');
             stats.innerHTML = '';
-            
             for (let cat in categories) {
                 const spent = data.filter(i => i.cat === cat).reduce((sum, i) => sum + parseInt(i.amount), 0);
                 const remaining = categories[cat] - spent;
                 const percent = Math.min((spent / categories[cat]) * 100, 100);
-                
                 stats.innerHTML += `
                     <div class="card">
                         <strong>${cat}</strong>: ${remaining} Ft maradt
@@ -46,14 +55,18 @@
             }
         }
 
-        function addExpense() {
-            const cat = prompt("Kategória (pl. 🛒 Bevásárlás):");
-            const amount = prompt("Összeg:");
-            if(cat && amount) {
-                data.push({date: new Date().toISOString().split('T')[0], cat, amount});
-                localStorage.setItem('expenses', JSON.stringify(data));
-                render();
-            }
+        function addExpense(cat) {
+            const amount = document.getElementById('amount').value;
+            if(!amount) { alert("Add meg az összeget!"); return; }
+            data.push({date: new Date().toISOString().split('T')[0], cat, amount});
+            localStorage.setItem('expenses', JSON.stringify(data));
+            document.getElementById('amount').value = '';
+            render();
+        }
+
+        const grid = document.getElementById('cat-grid');
+        for (let cat in categories) {
+            grid.innerHTML += `<button class="cat-btn" onclick="addExpense('${cat}')">${cat}</button>`;
         }
 
         function exportCSV() {
