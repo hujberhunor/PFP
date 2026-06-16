@@ -1,4 +1,4 @@
-# Meg Belefer
+# PocketRoom
 
 Mobil-first, magyar nyelvu koltsegkoveto app valtozo napi kiadasokhoz. A cel nem teljes penzugyi adminisztracio, hanem gyors valasz arra, hogy mennyi fer meg bele a havi keretbol, es havi CSV-ben at lehessen vinni a kolteseket Excelbe.
 
@@ -225,14 +225,6 @@ From,To,Amount,Currency
 5. PWA shell: `manifest.json`, `sw.js`, offline app shell.
 6. Kesobb opcionális Google Sheets sync.
 
-## Nev otletek
+## Nev
 
-Favorit: **Meg Belefer**
-
-Tovabbi lehetosegek:
-
-- Maradek
-- Keret
-- Napikassza
-- Keretor
-- Keretnaplo
+Valasztott nev: **PocketRoom**
