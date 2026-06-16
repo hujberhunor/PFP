@@ -671,6 +671,10 @@ function sumExpenses(items) {
     return items.reduce((sum, item) => sum + (parseInt(item.amount, 10) || 0), 0);
 }
 
+function sumCategoryExpenses(items, categoryName) {
+    return sumExpenses(items.filter(item => item.cat === categoryName));
+}
+
 function sumLimits(getLimit) {
     return categories.reduce((sum, cat) => sum + (getLimit(cat) || 0), 0);
 }
@@ -698,12 +702,20 @@ function countDaysInclusive(range) {
     return Math.round((end - start) / msPerDay) + 1;
 }
 
-function getProratedLimit(range, monthRange, monthlyLimit) {
-    if (!monthlyLimit || !range) { return 0; }
-    const daysInMonth = countDaysInclusive(monthRange);
-    const daysInRange = countDaysInclusive(range);
-    if (!daysInMonth || !daysInRange) { return 0; }
-    return Math.round((monthlyLimit / daysInMonth) * daysInRange);
+function getBudgetAwareWeeklyLimit(cat, weekRange, monthRange) {
+    const monthlyLimit = cat.monthlyLimit || 0;
+    if (!monthlyLimit || !weekRange) { return 0; }
+
+    const beforeWeekEnd = new Date(weekRange.start.getFullYear(), weekRange.start.getMonth(), weekRange.start.getDate());
+    beforeWeekEnd.setDate(beforeWeekEnd.getDate() - 1);
+    const beforeWeekRange = intersectRanges(monthRange, { start: monthRange.start, end: beforeWeekEnd });
+    const spentBeforeWeek = beforeWeekRange ? sumCategoryExpenses(filterData(beforeWeekRange), cat.name) : 0;
+    const remainingAtWeekStart = Math.max(0, monthlyLimit - spentBeforeWeek);
+    const daysLeftFromWeekStart = countDaysInclusive({ start: weekRange.start, end: monthRange.end });
+    const weekDays = countDaysInclusive(weekRange);
+
+    if (!remainingAtWeekStart || !daysLeftFromWeekStart || !weekDays) { return 0; }
+    return Math.round((remainingAtWeekStart / daysLeftFromWeekStart) * weekDays);
 }
 
 function vibrateSuccess() {
@@ -922,8 +934,8 @@ function renderAll() {
     renderStats(
         'stats-week',
         weekMonthRange,
-        cat => getProratedLimit(weekMonthRange, monthRange, cat.monthlyLimit),
-        { summaryTitle: 'Heti összesen', extraText: `${weekDays} napos heti keret` }
+        cat => getBudgetAwareWeeklyLimit(cat, weekMonthRange, monthRange),
+        { summaryTitle: 'Heti összesen', extraText: `A havi maradék ${weekDays} napra leosztva` }
     );
     renderStats(
         'stats-month',
