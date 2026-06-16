@@ -12,12 +12,16 @@
         <h2>Költségkövető</h2>
     </div>
     <section id="view-week" class="view active">
-        <h3>Heti kontroll</h3>
-        <div id="week-label" class="period-label"></div>
+        <div class="section-title-row compact-title">
+            <div>
+                <h3>Heti kontroll</h3>
+                <div id="week-label" class="period-label"></div>
+            </div>
+        </div>
         <div id="stats-week"></div>
 
-        <h3>Új kiadás</h3>
-        <form id="expense-form" class="stack expense-card">
+        <form id="expense-form" class="stack expense-card collapsed">
+            <strong>Új kiadás</strong>
             <label for="category-select">Kategória</label>
             <select id="category-select"></select>
             <label for="amount">Összeg</label>
@@ -32,49 +36,42 @@
         <h3>Havi maradvány</h3>
         <div id="month-label" class="period-label"></div>
         <div id="stats-month"></div>
-        <h3>Nyers adatok</h3>
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Category</th>
-                        <th>Amount</th>
-                        <th>Description</th>
-                        <th>Date</th>
-                        <th>Acc</th>
-                    </tr>
-                </thead>
-                <tbody id="month-raw"></tbody>
-            </table>
-        </div>
+        <h3>Kiadások</h3>
+        <div id="month-expenses" class="expense-list"></div>
     </section>
 
     <section id="view-settings" class="view">
         <h3>Beállítások</h3>
-        <div class="settings-header">
-            <div class="cat-name">Kategória</div>
-            <div class="limit-col">Havi limit (Ft)</div>
+        <div class="settings-grid">
+            <section class="settings-panel">
+                <div class="settings-panel-title">
+                    <strong>Költségkeretek</strong>
+                    <span id="settings-total">0 Ft</span>
+                </div>
+                <div class="period-label">A heti keret a havi limit naparányos heti szelete. Nincs heti spillover.</div>
+                <div id="settings-list"></div>
+                <button id="settings-save" class="action-btn" type="button">Mentés</button>
+            </section>
+
+            <section class="settings-panel stack">
+                <strong>Új kategória</strong>
+                <input type="text" id="new-cat-name" placeholder="Új kategória (pl. Pékáru)">
+                <input type="number" id="new-cat-monthly" placeholder="Havi limit (Ft)" inputmode="numeric" min="0" step="1">
+                <button id="category-add" class="action-btn" type="button">Kategória hozzáadása</button>
+            </section>
+
+            <section class="settings-panel stack">
+                <strong>Adatok és export</strong>
+                <button id="export-month" class="action-btn secondary-btn" type="button">Aktuális hónap CSV</button>
+                <button id="export-all" class="action-btn secondary-btn" type="button">Összes adat CSV</button>
+            </section>
+
+            <section class="settings-panel stack">
+                <strong>Utazások</strong>
+                <div class="period-label">Külön elszámolás, saját pénznemmel és exporttal.</div>
+                <button id="trips-open" class="action-btn secondary-btn" type="button">Utazások megnyitása</button>
+            </section>
         </div>
-        <div class="period-label">A heti keret a havi limit naparányos heti szelete. Nincs heti spillover.</div>
-        <div id="settings-list"></div>
-        <div id="settings-total" class="card">Összes havi limit: 0 Ft</div>
-        <div class="card stack" style="margin-top:12px;">
-            <strong>Új kategória</strong>
-            <input type="text" id="new-cat-name" placeholder="Új kategória (pl. 🍞 Pékáru)">
-            <input type="number" id="new-cat-monthly" placeholder="Havi limit (Ft)" inputmode="numeric" min="0" step="1">
-            <button class="action-btn" onclick="addCategory()">Kategória hozzáadása</button>
-        </div>
-        <div class="card stack" style="margin-top:12px;">
-            <strong>Utazások és közös költések</strong>
-            <div class="period-label">Teljesen külön elszámolás, külön pénznemmel és saját CSV exporttal.</div>
-            <button class="action-btn secondary-btn" onclick="switchView('trips')">Utazások megnyitása</button>
-        </div>
-        <div class="card stack" style="margin-top:12px;">
-            <strong>Export</strong>
-            <button class="action-btn secondary-btn" onclick="exportCSV('month')">Aktuális hónap CSV</button>
-            <button class="action-btn secondary-btn" onclick="exportCSV('all')">Összes adat CSV</button>
-        </div>
-        <button class="action-btn" style="margin-top:10px;" onclick="saveSettings()">Beállítások mentése</button>
     </section>
 
     <section id="view-trips" class="view">
@@ -157,6 +154,7 @@
             <button class="nav-btn" data-view="settings">Beállítások</button>
         </div>
     </div>
+    <button id="expense-toggle" class="fab" type="button" aria-label="Új kiadás">+</button>
 
     <script src="app.js"></script>
 </body>

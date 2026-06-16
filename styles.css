@@ -166,6 +166,28 @@ button:focus-visible {
     background: var(--card-soft);
 }
 
+.fab {
+    position: fixed;
+    right: max(18px, calc((100vw - 560px) / 2 + 18px));
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    z-index: 35;
+    width: 58px;
+    height: 58px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.fab.hidden {
+    display: none;
+}
+
 .view {
     display: none;
 }
@@ -276,6 +298,17 @@ button:focus-visible {
     margin-bottom: 0;
 }
 
+.stat-button {
+    width: 100%;
+    color: var(--text);
+    text-align: left;
+}
+
+.stat-button.selected {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 1px var(--accent-strong);
+}
+
 .stat-card strong {
     display: block;
     font-size: 14px;
@@ -321,6 +354,117 @@ button:focus-visible {
     transform: translateY(0);
 }
 
+.expense-card.collapsed {
+    display: none;
+}
+
+.expense-details {
+    grid-column: 1 / -1;
+}
+
+.expense-row,
+.expense-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.expense-row:last-child,
+.expense-card-row:last-child {
+    border-bottom: none;
+}
+
+.expense-row div,
+.expense-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.expense-row span,
+.expense-main span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.expense-row strong,
+.expense-main strong {
+    overflow-wrap: anywhere;
+}
+
+.expense-list {
+    display: grid;
+    gap: 8px;
+}
+
+.expense-card-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.expense-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.delete-btn {
+    min-height: 32px;
+    border: 1px solid color-mix(in srgb, var(--danger) 70%, var(--border));
+    border-radius: 10px;
+    background: transparent;
+    color: var(--danger);
+    padding: 5px 9px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.settings-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+}
+
+.settings-panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.settings-panel-title span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#settings-list {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+#settings-list .settings-row {
+    margin: 0;
+    box-shadow: none;
+}
+
 @media (max-width: 420px) {
     body {
         padding-left: 10px;
@@ -330,6 +474,23 @@ button:focus-visible {
     #stats-week,
     #stats-month {
         grid-template-columns: 1fr;
+    }
+
+    #stats-week {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    #stats-week .stat-card {
+        padding: 9px;
+    }
+
+    #stats-week .stat-card strong {
+        font-size: 13px;
+    }
+
+    #stats-week .stat-remaining {
+        font-size: 11px;
     }
 
     .header {
@@ -363,12 +524,17 @@ button:focus-visible {
 .section-title-row {
     display: flex;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: space-between;
     gap: 12px;
+}
+
+.compact-title {
+    align-items: center;
 }
 
 .section-title-row h3 {
     margin-top: 0;
+    margin-bottom: 3px;
 }
 
 .small-btn {

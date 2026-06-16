@@ -81,16 +81,17 @@ function loadLegacyCategories() {
 function normalizeExpenses(expenses) {
     let changed = false;
     const normalized = (Array.isArray(expenses) ? expenses : []).map(item => {
+        const id = typeof item?.id === 'string' && item.id ? item.id : generateId().replace('w_', 'x_');
         const amount = parseInt(item?.amount, 10);
         const rawCat = typeof item?.cat === 'string' ? item.cat : '';
         const cat = categoryAliases[rawCat] || rawCat;
         const date = typeof item?.date === 'string' ? item.date : formatLocalDate(new Date());
         const note = typeof item?.note === 'string' ? item.note : '';
 
-        if (cat !== rawCat || amount !== item?.amount || date !== item?.date || note !== item?.note) {
+        if (id !== item?.id || cat !== rawCat || amount !== item?.amount || date !== item?.date || note !== item?.note) {
             changed = true;
         }
-        return { date, cat, amount: Number.isFinite(amount) && amount > 0 ? amount : 0, note };
+        return { id, date, cat, amount: Number.isFinite(amount) && amount > 0 ? amount : 0, note };
     }).filter(item => item.cat && item.amount > 0);
     return { normalized, changed };
 }
@@ -617,6 +618,7 @@ let categories = [];
 let data = [];
 let trips = loadTrips();
 let currentTripId = loadCurrentTripId(trips);
+let expandedStats = {};
 
 function setCurrentWallet(id) {
     if (!wallets.some(wallet => wallet.id === id)) { return; }
@@ -720,6 +722,42 @@ function appendSummaryCard(stats, filtered, getLimit, options = {}) {
     stats.appendChild(card);
 }
 
+function appendExpenseDetails(stats, items, title, formatAmount = formatFt) {
+    const panel = document.createElement('div');
+    panel.className = 'card expense-details';
+
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    panel.appendChild(heading);
+
+    if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'period-label';
+        empty.textContent = 'Nincs kiadás ebben a kategóriában.';
+        panel.appendChild(empty);
+        stats.appendChild(panel);
+        return;
+    }
+
+    items.slice().reverse().forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'expense-row';
+        const meta = document.createElement('div');
+        const note = document.createElement('strong');
+        note.textContent = item.note || item.description || item.cat || 'Kiadás';
+        const date = document.createElement('span');
+        date.textContent = item.date;
+        meta.appendChild(note);
+        meta.appendChild(date);
+        const amount = document.createElement('strong');
+        amount.textContent = formatAmount(item.amount);
+        row.appendChild(meta);
+        row.appendChild(amount);
+        panel.appendChild(row);
+    });
+    stats.appendChild(panel);
+}
+
 function renderStats(containerId, range, getLimit, options = {}) {
     const stats = document.getElementById(containerId);
     if (!stats) { return; }
@@ -736,15 +774,19 @@ function renderStats(containerId, range, getLimit, options = {}) {
     appendSummaryCard(stats, filtered, getLimit, options);
 
     categories.forEach(cat => {
-        const spent = filtered
-            .filter(i => i.cat === cat.name)
-            .reduce((sum, i) => sum + (parseInt(i.amount, 10) || 0), 0);
+        const categoryItems = filtered.filter(i => i.cat === cat.name);
+        const spent = categoryItems.reduce((sum, i) => sum + (parseInt(i.amount, 10) || 0), 0);
         const limit = getLimit(cat);
         const remaining = limit - spent;
         const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
 
-        const card = document.createElement('div');
-        card.className = 'card stat-card';
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `card stat-card stat-button${expandedStats[containerId] === cat.name ? ' selected' : ''}`;
+        card.addEventListener('click', () => {
+            expandedStats[containerId] = expandedStats[containerId] === cat.name ? '' : cat.name;
+            renderAll();
+        });
 
         const title = document.createElement('strong');
         title.textContent = cat.name;
@@ -762,6 +804,10 @@ function renderStats(containerId, range, getLimit, options = {}) {
         card.appendChild(remainingEl);
         card.appendChild(barBg);
         stats.appendChild(card);
+
+        if (expandedStats[containerId] === cat.name) {
+            appendExpenseDetails(stats, categoryItems, cat.name);
+        }
     });
 }
 
@@ -829,7 +875,7 @@ function updateSettingsTotal() {
         const value = parseNonNegativeInt(input.value);
         return sum + (value === null ? 0 : value);
     }, 0);
-    totalEl.textContent = `Összes havi limit: ${formatFt(total)}`;
+    totalEl.textContent = `Összesen: ${formatFt(total)}`;
 }
 
 function renderAll() {
@@ -864,12 +910,13 @@ function addExpense() {
     const cat = categoryField.value;
     if (!cat) { alert("Válassz kategóriát!"); return; }
     const note = noteField.value.trim();
-    currentWallet.expenses.push({ date: formatLocalDate(new Date()), cat, amount, note });
+    currentWallet.expenses.push({ id: generateId().replace('w_', 'x_'), date: formatLocalDate(new Date()), cat, amount, note });
     persistWallets();
     amountField.value = '';
     noteField.value = '';
     categoryField.selectedIndex = 0;
     renderAll();
+    showMessage('Kiadás hozzáadva.');
 }
 
 
@@ -879,6 +926,17 @@ function setupExpenseForm() {
         event.preventDefault();
         addExpense();
     });
+    const toggle = document.getElementById('expense-toggle');
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            form.classList.toggle('collapsed');
+            toggle.textContent = form.classList.contains('collapsed') ? '+' : '×';
+            toggle.setAttribute('aria-label', form.classList.contains('collapsed') ? 'Új kiadás' : 'Kiadás bezárása');
+            if (!form.classList.contains('collapsed')) {
+                document.getElementById('category-select')?.focus();
+            }
+        });
+    }
 }
 
 function addCategory() {
@@ -926,6 +984,18 @@ function saveSettings() {
     persistWallets();
     renderAll();
     showMessage("Beállítások mentve.");
+}
+
+function deleteExpense(id) {
+    updateCurrentWallet();
+    const item = currentWallet.expenses.find(expense => expense.id === id);
+    if (!item) { return; }
+    const label = `${item.cat} · ${formatFt(item.amount)} · ${item.note || item.date}`;
+    if (!window.confirm(`Biztos törlöd ezt a kiadást?\n${label}`)) { return; }
+    currentWallet.expenses = currentWallet.expenses.filter(expense => expense.id !== id);
+    persistWallets();
+    renderAll();
+    showMessage('Kiadás törölve.');
 }
 
 function csvEscape(value) {
@@ -979,36 +1049,44 @@ function exportCSV(scope = 'all') {
 }
 
 function renderMonthTable(range) {
-    const body = document.getElementById('month-raw');
+    const body = document.getElementById('month-expenses');
+    if (!body) { return; }
     body.innerHTML = '';
     const filtered = filterData(range);
     if (!filtered.length) {
-        const row = document.createElement('tr');
-        const cell = document.createElement('td');
-        cell.colSpan = 5;
-        cell.textContent = 'Nincs adat.';
-        row.appendChild(cell);
-        body.appendChild(row);
+        const empty = document.createElement('div');
+        empty.className = 'card';
+        empty.textContent = 'Nincs adat.';
+        body.appendChild(empty);
         return;
     }
-    filtered.forEach(item => {
-        const row = document.createElement('tr');
+    filtered.slice().reverse().forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'expense-card-row';
         const note = item.note || '';
-        const cells = [
-            item.cat,
-            item.amount,
-            note,
-            formatExportDate(item.date),
-            resolveAcc(note)
-        ];
-        cells.forEach((value, index) => {
-            const cell = document.createElement('td');
-            cell.textContent = value;
-            if (index === 2) {
-                cell.className = 'desc';
-            }
-            row.appendChild(cell);
-        });
+        const main = document.createElement('div');
+        main.className = 'expense-main';
+        const title = document.createElement('strong');
+        title.textContent = note || item.cat;
+        const meta = document.createElement('span');
+        meta.textContent = `${item.cat} · ${formatExportDate(item.date)} · ${resolveAcc(note)}`;
+        main.appendChild(title);
+        main.appendChild(meta);
+
+        const side = document.createElement('div');
+        side.className = 'expense-side';
+        const amount = document.createElement('strong');
+        amount.textContent = formatFt(item.amount);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'delete-btn';
+        del.textContent = 'Törlés';
+        del.addEventListener('click', () => deleteExpense(item.id));
+        side.appendChild(amount);
+        side.appendChild(del);
+
+        row.appendChild(main);
+        row.appendChild(side);
         body.appendChild(row);
     });
 }
@@ -1025,6 +1103,18 @@ function switchView(view) {
     if (location.hash !== `#${nextView}`) {
         history.replaceState(null, '', `#${nextView}`);
     }
+    const expenseToggle = document.getElementById('expense-toggle');
+    if (expenseToggle) {
+        expenseToggle.classList.toggle('hidden', nextView !== 'week');
+    }
+}
+
+function setupSettingsEvents() {
+    document.getElementById('category-add')?.addEventListener('click', addCategory);
+    document.getElementById('settings-save')?.addEventListener('click', saveSettings);
+    document.getElementById('export-month')?.addEventListener('click', () => exportCSV('month'));
+    document.getElementById('export-all')?.addEventListener('click', () => exportCSV('all'));
+    document.getElementById('trips-open')?.addEventListener('click', () => switchView('trips'));
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1033,6 +1123,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 setupExpenseForm();
 setupTripEvents();
+setupSettingsEvents();
 const initialView = location.hash.replace('#', '');
 switchView(initialView);
 renderAll();
