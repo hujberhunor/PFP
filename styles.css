@@ -324,10 +324,34 @@ button:focus-visible {
 .summary-card {
     grid-column: 1 / -1;
     background: var(--card-soft);
+    padding: 14px;
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .summary-card strong {
     font-size: 16px;
+}
+
+.summary-amount {
+    margin-top: 6px;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.negative-text {
+    color: var(--danger);
+}
+
+.summary-extra {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.summary-bar {
+    height: 12px;
+    margin-top: 10px;
 }
 
 .message {
@@ -356,6 +380,10 @@ button:focus-visible {
 
 .expense-card.collapsed {
     display: none;
+}
+
+.expense-card {
+    scroll-margin-top: 70px;
 }
 
 .expense-details {
@@ -416,16 +444,90 @@ button:focus-visible {
     white-space: nowrap;
 }
 
+.edit-btn,
 .delete-btn {
     min-height: 32px;
-    border: 1px solid color-mix(in srgb, var(--danger) 70%, var(--border));
     border-radius: 10px;
     background: transparent;
-    color: var(--danger);
     padding: 5px 9px;
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+}
+
+.edit-btn {
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+.delete-btn {
+    border: 1px solid color-mix(in srgb, var(--danger) 70%, var(--border));
+    color: var(--danger);
+}
+
+.expense-card-row.editing {
+    align-items: stretch;
+}
+
+.expense-edit-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+}
+
+.expense-edit-form input,
+.expense-edit-form select {
+    min-height: 42px;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+.expense-edit-form input[data-field="note"],
+.expense-edit-form .edit-actions {
+    grid-column: 1 / -1;
+}
+
+.edit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.primary-small {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.editable-table th,
+.editable-table td {
+    vertical-align: middle;
+}
+
+.table-actions {
+    white-space: nowrap;
+}
+
+.table-action-buttons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.editable-table .expense-edit-form {
+    grid-template-columns: minmax(120px, 1fr) minmax(96px, 0.8fr) minmax(150px, 1.3fr) minmax(120px, 1fr) auto auto;
+    align-items: center;
+}
+
+.editable-table .expense-edit-form input[data-field="note"],
+.editable-table .expense-edit-form .edit-actions {
+    grid-column: auto;
+}
+
+.category-delete-btn {
+    min-width: 72px;
 }
 
 .settings-grid {

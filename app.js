@@ -619,6 +619,7 @@ let data = [];
 let trips = loadTrips();
 let currentTripId = loadCurrentTripId(trips);
 let expandedStats = {};
+let editingExpenseId = '';
 
 function setCurrentWallet(id) {
     if (!wallets.some(wallet => wallet.id === id)) { return; }
@@ -639,7 +640,9 @@ function parseLocalDate(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
     if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) { return null; }
     const date = new Date(y, m - 1, d);
-    return Number.isNaN(date.getTime()) ? null : date;
+    if (Number.isNaN(date.getTime())) { return null; }
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) { return null; }
+    return date;
 }
 
 function getWeekRange(today) {
@@ -703,22 +706,44 @@ function getProratedLimit(range, monthRange, monthlyLimit) {
     return Math.round((monthlyLimit / daysInMonth) * daysInRange);
 }
 
+function vibrateSuccess() {
+    if (navigator.vibrate) {
+        navigator.vibrate(35);
+    }
+}
+
 function appendSummaryCard(stats, filtered, getLimit, options = {}) {
     const spent = sumExpenses(filtered);
     const limit = sumLimits(getLimit);
     const remaining = limit - spent;
+    const percent = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
 
     const card = document.createElement('div');
     card.className = 'card stat-card summary-card';
 
     const title = document.createElement('strong');
     title.textContent = options.summaryTitle || 'Összesen';
+    const amount = document.createElement('div');
+    amount.className = `summary-amount${remaining < 0 ? ' negative-text' : ''}`;
+    amount.textContent = `${formatFt(remaining)} maradt`;
     const meta = document.createElement('div');
     meta.className = 'stat-remaining';
-    meta.textContent = `${formatFt(spent)} költés · ${formatFt(limit)} keret · ${formatFt(remaining)} maradt`;
+    meta.textContent = `${formatFt(spent)} költés · ${formatFt(limit)} keret`;
+    const extra = document.createElement('div');
+    extra.className = 'summary-extra';
+    extra.textContent = options.extraText || '';
+    const barBg = document.createElement('div');
+    barBg.className = 'bar-bg summary-bar';
+    const barFill = document.createElement('div');
+    barFill.className = `bar-fill${remaining < 0 ? ' negative' : ''}`;
+    barFill.style.width = `${percent}%`;
 
     card.appendChild(title);
+    card.appendChild(amount);
     card.appendChild(meta);
+    if (options.extraText) { card.appendChild(extra); }
+    barBg.appendChild(barFill);
+    card.appendChild(barBg);
     stats.appendChild(card);
 }
 
@@ -860,8 +885,14 @@ function renderSettings() {
         monthlyInput.dataset.index = index;
         monthlyInput.dataset.type = 'monthly';
         monthlyInput.addEventListener('input', updateSettingsTotal);
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'delete-btn category-delete-btn';
+        deleteButton.textContent = 'Törlés';
+        deleteButton.addEventListener('click', () => deleteCategory(index));
         row.appendChild(name);
         row.appendChild(monthlyInput);
+        row.appendChild(deleteButton);
         list.appendChild(row);
     });
     updateSettingsTotal();
@@ -885,16 +916,22 @@ function renderAll() {
     const monthRange = getMonthRange(today);
     const weekMonthRange = intersectRanges(weekRange, monthRange) || weekRange;
     const weekDays = countDaysInclusive(weekMonthRange);
+    const remainingMonthDays = countDaysInclusive({ start: today, end: monthRange.end });
     document.getElementById('week-label').textContent = `${formatLocalDate(weekMonthRange.start)} – ${formatLocalDate(weekMonthRange.end)} · ${weekDays} nap ebből a hónapból`;
     document.getElementById('month-label').textContent = `${formatLocalDate(monthRange.start)} – ${formatLocalDate(monthRange.end)}`;
     renderStats(
         'stats-week',
         weekMonthRange,
         cat => getProratedLimit(weekMonthRange, monthRange, cat.monthlyLimit),
-        { summaryTitle: 'Heti összesen' }
+        { summaryTitle: 'Heti összesen', extraText: `${weekDays} napos heti keret` }
     );
-    renderStats('stats-month', monthRange, cat => cat.monthlyLimit || 0, { summaryTitle: 'Havi összesen' });
-    renderMonthTable(monthRange);
+    renderStats(
+        'stats-month',
+        monthRange,
+        cat => cat.monthlyLimit || 0,
+        { summaryTitle: 'Havi összesen', extraText: `${remainingMonthDays} nap van hátra a hónapból` }
+    );
+    renderExpenseTable('month-expenses', monthRange);
     renderCategorySelect();
     renderSettings();
     renderTrips();
@@ -916,6 +953,7 @@ function addExpense() {
     noteField.value = '';
     categoryField.selectedIndex = 0;
     renderAll();
+    vibrateSuccess();
     showMessage('Kiadás hozzáadva.');
 }
 
@@ -930,10 +968,12 @@ function setupExpenseForm() {
     if (toggle) {
         toggle.addEventListener('click', () => {
             form.classList.toggle('collapsed');
-            toggle.textContent = form.classList.contains('collapsed') ? '+' : '×';
-            toggle.setAttribute('aria-label', form.classList.contains('collapsed') ? 'Új kiadás' : 'Kiadás bezárása');
-            if (!form.classList.contains('collapsed')) {
-                document.getElementById('category-select')?.focus();
+            const isCollapsed = form.classList.contains('collapsed');
+            toggle.textContent = isCollapsed ? '+' : '×';
+            toggle.setAttribute('aria-label', isCollapsed ? 'Új kiadás' : 'Kiadás bezárása');
+            if (!isCollapsed) {
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                window.setTimeout(() => document.getElementById('category-select')?.focus(), 250);
             }
         });
     }
@@ -955,6 +995,20 @@ function addCategory() {
     renderAll();
 }
 
+function getSettingsValues() {
+    let invalid = false;
+    const updated = categories.map((cat, index) => {
+        const monthlyInput = document.querySelector(`#settings-list input[data-index="${index}"][data-type="monthly"]`);
+        const monthlyLimit = parseNonNegativeInt(monthlyInput?.value);
+        if (monthlyLimit === null) { invalid = true; }
+        return {
+            ...cat,
+            monthlyLimit: monthlyLimit === null ? 0 : monthlyLimit
+        };
+    });
+    return { updated, invalid };
+}
+
 function showMessage(message) {
     const box = document.getElementById('message');
     if (!box) { alert(message); return; }
@@ -966,24 +1020,35 @@ function showMessage(message) {
 
 function saveSettings() {
     updateCurrentWallet();
-    let invalid = false;
-    const updated = categories.map((cat, index) => {
-        const monthlyInput = document.querySelector(`#settings-list input[data-index="${index}"][data-type="monthly"]`);
-        const monthlyLimit = parseNonNegativeInt(monthlyInput.value);
-        if (monthlyLimit === null) {
-            invalid = true;
-        }
-        return {
-            ...cat,
-            monthlyLimit: monthlyLimit === null ? 0 : monthlyLimit
-        };
-    });
+    const { updated, invalid } = getSettingsValues();
     if (invalid) { alert("Minden kategóriához adj meg 0 vagy annál nagyobb havi limitet."); return; }
     currentWallet.categories = updated;
     categories = updated;
     persistWallets();
     renderAll();
     showMessage("Beállítások mentve.");
+}
+
+function deleteCategory(index) {
+    updateCurrentWallet();
+    const { updated, invalid } = getSettingsValues();
+    if (invalid) { alert("Törlés előtt javítsd a kategória limiteket."); return; }
+    const category = updated[index];
+    if (!category) { return; }
+    const expenseCount = currentWallet.expenses.filter(expense => expense.cat === category.name).length;
+    const baseMessage = expenseCount
+        ? `A(z) "${category.name}" kategóriához ${expenseCount} kiadás tartozik. A kiadások megmaradnak, csak a kategória kerül ki a választható keretekből.`
+        : `Biztos törlöd ezt a kategóriát?\n${category.name}`;
+    if (!window.confirm(baseMessage)) { return; }
+    if (expenseCount > 0) {
+        const typed = window.prompt(`Megerősítéshez írd be pontosan: ${category.name}`);
+        if (typed !== category.name) { return; }
+    }
+    currentWallet.categories = updated.filter((_, itemIndex) => itemIndex !== index);
+    categories = currentWallet.categories;
+    persistWallets();
+    renderAll();
+    showMessage('Kategória törölve.');
 }
 
 function deleteExpense(id) {
@@ -993,9 +1058,106 @@ function deleteExpense(id) {
     const label = `${item.cat} · ${formatFt(item.amount)} · ${item.note || item.date}`;
     if (!window.confirm(`Biztos törlöd ezt a kiadást?\n${label}`)) { return; }
     currentWallet.expenses = currentWallet.expenses.filter(expense => expense.id !== id);
+    if (editingExpenseId === id) { editingExpenseId = ''; }
     persistWallets();
     renderAll();
     showMessage('Kiadás törölve.');
+}
+
+function saveExpenseEdit(id) {
+    updateCurrentWallet();
+    const item = currentWallet.expenses.find(expense => expense.id === id);
+    if (!item) { return; }
+    const dateField = document.querySelector(`[data-edit-id="${id}"][data-field="date"]`);
+    const catField = document.querySelector(`[data-edit-id="${id}"][data-field="cat"]`);
+    const amountField = document.querySelector(`[data-edit-id="${id}"][data-field="amount"]`);
+    const noteField = document.querySelector(`[data-edit-id="${id}"][data-field="note"]`);
+    const date = dateField?.value || '';
+    const amount = parseNonNegativeInt(amountField?.value);
+    if (!parseLocalDate(date)) { alert('Adj meg érvényes dátumot!'); return; }
+    if (!catField?.value) { alert('Válassz kategóriát!'); return; }
+    if (amount === null || amount <= 0) { alert('Add meg az összeget!'); return; }
+    item.date = date;
+    item.cat = catField.value;
+    item.amount = amount;
+    item.note = noteField?.value.trim() || '';
+    editingExpenseId = '';
+    persistWallets();
+    renderAll();
+    vibrateSuccess();
+    showMessage('Kiadás mentve.');
+}
+
+function renderExpenseEditForm(item) {
+    const form = document.createElement('form');
+    form.className = 'expense-edit-form';
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        saveExpenseEdit(item.id);
+    });
+
+    const date = document.createElement('input');
+    date.type = 'date';
+    date.value = item.date;
+    date.dataset.editId = item.id;
+    date.dataset.field = 'date';
+
+    const cat = document.createElement('select');
+    cat.dataset.editId = item.id;
+    cat.dataset.field = 'cat';
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.name;
+        option.textContent = category.name;
+        cat.appendChild(option);
+    });
+    if (!categories.some(category => category.name === item.cat)) {
+        const option = document.createElement('option');
+        option.value = item.cat;
+        option.textContent = item.cat;
+        cat.appendChild(option);
+    }
+    cat.value = item.cat;
+
+    const amount = document.createElement('input');
+    amount.type = 'number';
+    amount.min = '1';
+    amount.step = '1';
+    amount.inputMode = 'numeric';
+    amount.value = item.amount;
+    amount.dataset.editId = item.id;
+    amount.dataset.field = 'amount';
+
+    const note = document.createElement('input');
+    note.type = 'text';
+    note.value = item.note || '';
+    note.placeholder = 'Megjegyzés';
+    note.dataset.editId = item.id;
+    note.dataset.field = 'note';
+
+    const actions = document.createElement('div');
+    actions.className = 'edit-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'small-btn';
+    cancel.textContent = 'Mégse';
+    cancel.addEventListener('click', () => {
+        editingExpenseId = '';
+        renderAll();
+    });
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'small-btn primary-small';
+    save.textContent = 'Mentés';
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+
+    form.appendChild(cat);
+    form.appendChild(amount);
+    form.appendChild(note);
+    form.appendChild(date);
+    form.appendChild(actions);
+    return form;
 }
 
 function csvEscape(value) {
@@ -1048,45 +1210,64 @@ function exportCSV(scope = 'all') {
     URL.revokeObjectURL(url);
 }
 
-function renderMonthTable(range) {
-    const body = document.getElementById('month-expenses');
+function renderExpenseTable(containerId, range) {
+    const body = document.getElementById(containerId);
     if (!body) { return; }
     body.innerHTML = '';
     const filtered = filterData(range);
     if (!filtered.length) {
-        const empty = document.createElement('div');
-        empty.className = 'card';
-        empty.textContent = 'Nincs adat.';
-        body.appendChild(empty);
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 6;
+        cell.textContent = 'Nincs adat.';
+        row.appendChild(cell);
+        body.appendChild(row);
         return;
     }
     filtered.slice().reverse().forEach(item => {
-        const row = document.createElement('div');
-        row.className = 'expense-card-row';
+        const row = document.createElement('tr');
         const note = item.note || '';
-        const main = document.createElement('div');
-        main.className = 'expense-main';
-        const title = document.createElement('strong');
-        title.textContent = note || item.cat;
-        const meta = document.createElement('span');
-        meta.textContent = `${item.cat} · ${formatExportDate(item.date)} · ${resolveAcc(note)}`;
-        main.appendChild(title);
-        main.appendChild(meta);
-
-        const side = document.createElement('div');
-        side.className = 'expense-side';
-        const amount = document.createElement('strong');
-        amount.textContent = formatFt(item.amount);
+        if (editingExpenseId === item.id) {
+            const editCell = document.createElement('td');
+            editCell.colSpan = 6;
+            editCell.appendChild(renderExpenseEditForm(item));
+            row.appendChild(editCell);
+            body.appendChild(row);
+            return;
+        }
+        [
+            item.cat,
+            item.amount,
+            note,
+            formatExportDate(item.date),
+            resolveAcc(note)
+        ].forEach((value, index) => {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            if (index === 2) { cell.className = 'desc'; }
+            row.appendChild(cell);
+        });
+        const actions = document.createElement('td');
+        actions.className = 'table-actions';
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'table-action-buttons';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'edit-btn';
+        edit.textContent = 'Szerk.';
+        edit.addEventListener('click', () => {
+            editingExpenseId = item.id;
+            renderAll();
+        });
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'delete-btn';
         del.textContent = 'Törlés';
         del.addEventListener('click', () => deleteExpense(item.id));
-        side.appendChild(amount);
-        side.appendChild(del);
-
-        row.appendChild(main);
-        row.appendChild(side);
+        actionButtons.appendChild(edit);
+        actionButtons.appendChild(del);
+        actions.appendChild(actionButtons);
+        row.appendChild(actions);
         body.appendChild(row);
     });
 }

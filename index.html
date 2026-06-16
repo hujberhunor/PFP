@@ -30,14 +30,29 @@
             <input type="text" id="note" placeholder="pl. kifli, jegy, pizza" autocomplete="off">
             <button class="action-btn" type="submit">Hozzáadás</button>
         </form>
+
     </section>
 
     <section id="view-month" class="view">
         <h3>Havi maradvány</h3>
         <div id="month-label" class="period-label"></div>
         <div id="stats-month"></div>
-        <h3>Kiadások</h3>
-        <div id="month-expenses" class="expense-list"></div>
+        <h3>Havi CSV</h3>
+        <div class="table-wrap">
+            <table class="data-table editable-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Acc</th>
+                        <th>Művelet</th>
+                    </tr>
+                </thead>
+                <tbody id="month-expenses"></tbody>
+            </table>
+        </div>
     </section>
 
     <section id="view-settings" class="view">
