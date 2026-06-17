@@ -471,7 +471,8 @@ function createTrip() {
     nameField.value = '';
     currencyField.value = '';
     if (budgetField) { budgetField.value = ''; }
-    document.getElementById('trip-create-panel')?.removeAttribute('open');
+    document.getElementById('trip-create-form')?.classList.add('collapsed');
+    document.getElementById('trip-create-toggle')?.classList.remove('open');
     renderTrips();
     showMessage('Tárca létrehozva.');
 }
@@ -581,6 +582,16 @@ function exportTripCSV() {
 function setupTripEvents() {
     const select = document.getElementById('trip-select');
     if (select) { select.addEventListener('change', () => setCurrentTrip(select.value)); }
+    document.getElementById('trip-create-toggle')?.addEventListener('click', () => {
+        const form = document.getElementById('trip-create-form');
+        const toggle = document.getElementById('trip-create-toggle');
+        if (!form || !toggle) { return; }
+        form.classList.toggle('collapsed');
+        toggle.classList.toggle('open', !form.classList.contains('collapsed'));
+        if (!form.classList.contains('collapsed')) {
+            window.setTimeout(() => document.getElementById('trip-name')?.focus(), 150);
+        }
+    });
     document.getElementById('trip-create-submit')?.addEventListener('click', createTrip);
     const expenseForm = document.getElementById('trip-expense-form');
     if (expenseForm) {

@@ -102,9 +102,9 @@
             <button class="small-btn" onclick="switchView('settings')">Vissza</button>
         </div>
 
-        <details id="trip-create-panel" class="card stack">
-            <summary>Új tárca</summary>
-            <div id="trip-create-form" class="stack">
+        <div id="trip-create-panel" class="card stack">
+            <button id="trip-create-toggle" class="plain-toggle" type="button">Új tárca</button>
+            <div id="trip-create-form" class="stack collapsed">
                 <label for="trip-name">Tárca neve</label>
                 <input type="text" id="trip-name" placeholder="pl. Fesztivál 2026" autocomplete="off">
                 <label for="trip-currency">Pénznem (opcionális)</label>
@@ -113,7 +113,7 @@
                 <input type="number" id="trip-budget" placeholder="pl. 80000" inputmode="decimal" min="0" step="1" autocomplete="off">
                 <button id="trip-create-submit" class="action-btn" type="button">Tárca létrehozása</button>
             </div>
-        </details>
+        </div>
 
         <div class="card stack">
             <strong>Aktív tárca</strong>
