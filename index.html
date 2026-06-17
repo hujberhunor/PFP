@@ -58,27 +58,31 @@
     <section id="view-settings" class="view">
         <h3>Beállítások</h3>
         <div class="settings-grid">
-            <section class="settings-panel">
-                <div class="settings-panel-title">
+            <details class="settings-panel">
+                <summary class="settings-panel-title">
                     <strong>Költségkeretek</strong>
                     <span id="settings-total">0 Ft</span>
-                </div>
+                </summary>
                 <div class="period-label">A heti keret a havi limit naparányos heti szelete. Nincs heti spillover.</div>
                 <div id="settings-list"></div>
                 <button id="settings-save" class="action-btn" type="button">Mentés</button>
-            </section>
-
-            <section class="settings-panel stack">
+                <div class="settings-subform stack">
                 <strong>Új kategória</strong>
                 <input type="text" id="new-cat-name" placeholder="Új kategória (pl. Pékáru)">
                 <input type="number" id="new-cat-monthly" placeholder="Havi limit (Ft)" inputmode="numeric" min="0" step="1">
                 <button id="category-add" class="action-btn" type="button">Kategória hozzáadása</button>
-            </section>
+                </div>
+            </details>
 
             <section class="settings-panel stack">
                 <strong>Adatok és export</strong>
                 <button id="export-month" class="action-btn secondary-btn" type="button">Aktuális hónap CSV</button>
                 <button id="export-all" class="action-btn secondary-btn" type="button">Összes adat CSV</button>
+                <details class="debug-panel">
+                    <summary>Debug CSV import</summary>
+                    <div class="period-label">Csak fejlesztéshez. Támogatott: régi havi CSV vagy új tranzakciós séma.</div>
+                    <input type="file" id="csv-import-file" accept=".csv,text/csv">
+                </details>
             </section>
 
             <section class="settings-panel stack">
@@ -92,69 +96,63 @@
     <section id="view-trips" class="view">
         <div class="section-title-row">
             <div>
-                <h3>Utazások</h3>
-                <div class="period-label">Külön Splitwise-szerű elszámolás. Nem számít bele a havi keretbe.</div>
+                <h3>Utazós tárcák</h3>
+                <div class="period-label">Külön event wallet CSV-vel. Nem számít bele a havi keretbe.</div>
             </div>
             <button class="small-btn" onclick="switchView('settings')">Vissza</button>
         </div>
 
-        <div class="card stack">
-            <strong>Új utazás</strong>
-            <form id="trip-create-form" class="stack">
-                <label for="trip-name">Utazás neve</label>
-                <input type="text" id="trip-name" placeholder="pl. Krakkó 2026" autocomplete="off">
-                <label for="trip-currency">Pénznem</label>
-                <input type="text" id="trip-currency" placeholder="pl. EUR, PLN, CZK" maxlength="6" autocomplete="off">
-                <label for="trip-people">Résztvevők</label>
-                <input type="text" id="trip-people" placeholder="pl. Hunor, Anna, Dani" autocomplete="off">
-                <button class="action-btn" type="submit">Utazás létrehozása</button>
-            </form>
-        </div>
+        <details id="trip-create-panel" class="card stack">
+            <summary>Új tárca</summary>
+            <div id="trip-create-form" class="stack">
+                <label for="trip-name">Tárca neve</label>
+                <input type="text" id="trip-name" placeholder="pl. Fesztivál 2026" autocomplete="off">
+                <label for="trip-currency">Pénznem (opcionális)</label>
+                <input type="text" id="trip-currency" placeholder="alap: HUF" maxlength="6" autocomplete="off">
+                <label for="trip-budget">Keret (opcionális)</label>
+                <input type="number" id="trip-budget" placeholder="pl. 80000" inputmode="decimal" min="0" step="1" autocomplete="off">
+                <button id="trip-create-submit" class="action-btn" type="button">Tárca létrehozása</button>
+            </div>
+        </details>
 
         <div class="card stack">
-            <strong>Aktív utazás</strong>
+            <strong>Aktív tárca</strong>
             <select id="trip-select"></select>
-            <div id="trip-people-list" class="pill-list"></div>
-            <form id="trip-person-form" class="inline-form">
-                <input type="text" id="trip-new-person" placeholder="Új résztvevő" autocomplete="off">
-                <button class="small-btn" type="submit">Hozzáad</button>
-            </form>
         </div>
 
         <div id="trip-summary" class="trip-summary"></div>
 
-        <div class="card stack">
-            <strong>Új közös költés</strong>
-            <form id="trip-expense-form" class="stack">
-                <label for="trip-date">Dátum</label>
-                <input type="date" id="trip-date">
-                <label for="trip-description">Leírás</label>
-                <input type="text" id="trip-description" placeholder="pl. szállás, vacsora, benzin" autocomplete="off">
+        <form id="trip-expense-form" class="stack expense-card collapsed">
+            <strong>Új utazós költés</strong>
+                <label for="trip-category">Kategória</label>
+                <select id="trip-category"></select>
                 <label for="trip-amount">Összeg</label>
                 <input type="number" id="trip-amount" placeholder="Összeg" inputmode="decimal" min="0.01" step="0.01" autocomplete="off">
-                <label for="trip-paid-by">Ki fizette?</label>
-                <select id="trip-paid-by"></select>
-                <label>Kik között oszlik meg?</label>
-                <div id="trip-split-between" class="check-grid"></div>
-                <button class="action-btn" type="submit">Közös költés hozzáadása</button>
-            </form>
-        </div>
+                <label for="trip-note">Megjegyzés</label>
+                <input type="text" id="trip-note" placeholder="pl. nagyszínpad, burger" autocomplete="off">
+                <label for="trip-expense-currency">Pénznem (opcionális)</label>
+                <input type="text" id="trip-expense-currency" placeholder="alap: a tárca pénzneme" maxlength="6" autocomplete="off">
+                <label for="trip-date">Dátum</label>
+                <input type="date" id="trip-date">
+                <button class="action-btn" type="submit">Költés hozzáadása</button>
+        </form>
 
         <div class="card stack">
-            <strong>Utazás export</strong>
-            <button class="action-btn secondary-btn" onclick="exportTripCSV()">Aktív utazás CSV export</button>
+            <strong>Tárca export</strong>
+            <button class="action-btn secondary-btn" onclick="exportTripCSV()">Aktív tárca CSV export</button>
         </div>
 
-        <h3>Közös költések</h3>
+        <h3>Utazós CSV</h3>
         <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table editable-table">
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Description</th>
+                        <th>Category</th>
                         <th>Amount</th>
-                        <th>Paid by</th>
-                        <th>Split</th>
+                        <th>Currency</th>
+                        <th>Note</th>
+                        <th>Művelet</th>
                     </tr>
                 </thead>
                 <tbody id="trip-expenses-body"></tbody>

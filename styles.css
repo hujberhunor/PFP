@@ -78,6 +78,48 @@ label {
     box-shadow: 0 1px 3px rgba(0,0,0,0.18);
 }
 
+details.card summary,
+details.settings-panel summary {
+    cursor: pointer;
+    font-weight: 700;
+    list-style: none;
+}
+
+details.card summary::-webkit-details-marker,
+details.settings-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+details.card summary::after,
+details.settings-panel summary::after {
+    content: "+";
+    float: right;
+    color: var(--muted);
+}
+
+details.card[open] summary,
+details.settings-panel[open] summary {
+    margin-bottom: 10px;
+}
+
+details.card[open] summary::after,
+details.settings-panel[open] summary::after {
+    content: "×";
+}
+
+.debug-panel {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.debug-panel summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .bar-bg {
     background: #e9e9ee;
     height: 10px;
@@ -550,6 +592,10 @@ button:focus-visible {
     margin-bottom: 4px;
 }
 
+details.settings-panel .settings-panel-title {
+    margin-bottom: 0;
+}
+
 .settings-panel-title span {
     color: var(--muted);
     font-size: 13px;
@@ -565,6 +611,12 @@ button:focus-visible {
 #settings-list .settings-row {
     margin: 0;
     box-shadow: none;
+}
+
+.settings-subform {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
 }
 
 @media (max-width: 420px) {
@@ -704,7 +756,7 @@ button:focus-visible {
     gap: 10px;
 }
 
-.settlement-row {
+.summary-row {
     display: flex;
     justify-content: center;
     gap: 12px;
@@ -713,7 +765,7 @@ button:focus-visible {
     font-size: 14px;
 }
 
-.settlement-row:last-child {
+.summary-row:last-child {
     border-bottom: none;
 }
 

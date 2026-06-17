@@ -163,45 +163,42 @@ function updateCurrentWallet() {
 }
 
 
-function normalizePeople(list) {
-    if (!Array.isArray(list)) { return []; }
-    const seen = new Set();
-    return list.map(person => typeof person === 'string' ? person.trim() : '')
-        .filter(Boolean)
-        .filter(person => {
-            const key = person.toLowerCase();
-            if (seen.has(key)) { return false; }
-            seen.add(key);
-            return true;
-        });
+function parseOptionalPositiveNumber(value) {
+    if (value === undefined || value === null || value === '') { return null; }
+    return parsePositiveNumber(value);
 }
 
-function normalizeTripExpense(item, people) {
+function normalizeCurrency(value, fallback = 'HUF') {
+    const currency = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    return currency || fallback;
+}
+
+function normalizeTripExpense(item, baseCurrency) {
     const source = item && typeof item === 'object' ? item : {};
     const amount = parsePositiveNumber(source.amount);
-    const paidBy = typeof source.paidBy === 'string' ? source.paidBy.trim() : '';
-    const splitBetween = normalizePeople(source.splitBetween || []).filter(person => people.includes(person));
+    const currency = normalizeCurrency(source.currency, baseCurrency);
     return {
         id: source.id || generateId().replace('w_', 'e_'),
         date: typeof source.date === 'string' ? source.date : formatLocalDate(new Date()),
         description: typeof source.description === 'string' ? source.description.trim() : '',
         amount: amount || 0,
-        paidBy,
-        splitBetween
+        currency,
+        category: typeof source.category === 'string' ? source.category.trim() : '',
+        note: typeof source.note === 'string' ? source.note.trim() : ''
     };
 }
 
 function normalizeTrip(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};
-    const people = normalizePeople(source.people || []);
+    const baseCurrency = normalizeCurrency(source.baseCurrency || source.currency, 'HUF');
     const expenses = (Array.isArray(source.expenses) ? source.expenses : [])
-        .map(item => normalizeTripExpense(item, people))
-        .filter(item => item.amount > 0 && item.paidBy && people.includes(item.paidBy) && item.splitBetween.length);
+        .map(item => normalizeTripExpense(item, baseCurrency))
+        .filter(item => item.amount > 0);
     return {
         id: source.id || generateId().replace('w_', 't_'),
         name: typeof source.name === 'string' && source.name.trim() ? source.name.trim() : 'Utazás',
-        currency: typeof source.currency === 'string' && source.currency.trim() ? source.currency.trim().toUpperCase() : 'EUR',
-        people,
+        baseCurrency,
+        budget: parseOptionalPositiveNumber(source.budget) || 0,
         expenses
     };
 }
@@ -241,48 +238,6 @@ function formatCurrencyAmount(value, currency) {
     return `${rounded.toLocaleString('hu-HU', { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 })} ${currency}`;
 }
 
-function calculateTripBalances(trip) {
-    const balances = Object.fromEntries(trip.people.map(person => [person, 0]));
-    trip.expenses.forEach(expense => {
-        if (!balances.hasOwnProperty(expense.paidBy) || !expense.splitBetween.length) { return; }
-        balances[expense.paidBy] += expense.amount;
-        const share = expense.amount / expense.splitBetween.length;
-        expense.splitBetween.forEach(person => {
-            if (balances.hasOwnProperty(person)) { balances[person] -= share; }
-        });
-    });
-    Object.keys(balances).forEach(person => {
-        balances[person] = Math.round(balances[person] * 100) / 100;
-    });
-    return balances;
-}
-
-function calculateTripSettlements(trip) {
-    const balances = calculateTripBalances(trip);
-    const debtors = Object.entries(balances)
-        .filter(([, balance]) => balance < -0.005)
-        .map(([person, balance]) => ({ person, amount: Math.abs(balance) }))
-        .sort((a, b) => b.amount - a.amount);
-    const creditors = Object.entries(balances)
-        .filter(([, balance]) => balance > 0.005)
-        .map(([person, balance]) => ({ person, amount: balance }))
-        .sort((a, b) => b.amount - a.amount);
-    const settlements = [];
-    let d = 0;
-    let c = 0;
-    while (d < debtors.length && c < creditors.length) {
-        const amount = Math.min(debtors[d].amount, creditors[c].amount);
-        if (amount > 0.005) {
-            settlements.push({ from: debtors[d].person, to: creditors[c].person, amount: Math.round(amount * 100) / 100 });
-        }
-        debtors[d].amount = Math.round((debtors[d].amount - amount) * 100) / 100;
-        creditors[c].amount = Math.round((creditors[c].amount - amount) * 100) / 100;
-        if (debtors[d].amount <= 0.005) { d += 1; }
-        if (creditors[c].amount <= 0.005) { c += 1; }
-    }
-    return settlements;
-}
-
 function renderTripSelect() {
     const select = document.getElementById('trip-select');
     if (!select) { return; }
@@ -299,60 +254,18 @@ function renderTripSelect() {
     trips.forEach(trip => {
         const option = document.createElement('option');
         option.value = trip.id;
-        option.textContent = `${trip.name} · ${trip.currency}`;
+        option.textContent = `${trip.name} · ${trip.baseCurrency}`;
         select.appendChild(option);
     });
     select.value = currentTripId;
 }
 
-function renderTripPeople(trip) {
-    const list = document.getElementById('trip-people-list');
-    if (!list) { return; }
-    list.innerHTML = '';
-    if (!trip || !trip.people.length) {
-        const empty = document.createElement('div');
-        empty.className = 'period-label';
-        empty.textContent = 'Nincs résztvevő.';
-        list.appendChild(empty);
-        return;
-    }
-    trip.people.forEach(person => {
-        const pill = document.createElement('span');
-        pill.className = 'pill';
-        pill.textContent = person;
-        list.appendChild(pill);
-    });
-}
-
 function renderTripExpenseForm(trip) {
     const form = document.getElementById('trip-expense-form');
-    const paidBy = document.getElementById('trip-paid-by');
-    const splitBox = document.getElementById('trip-split-between');
-    if (!form || !paidBy || !splitBox) { return; }
-    const enabled = Boolean(trip && trip.people.length);
+    if (!form) { return; }
+    const enabled = Boolean(trip);
     form.classList.toggle('disabled-block', !enabled);
     form.querySelectorAll('input, select, button').forEach(el => { el.disabled = !enabled; });
-    paidBy.innerHTML = '';
-    splitBox.innerHTML = '';
-    if (!enabled) { return; }
-    trip.people.forEach(person => {
-        const option = document.createElement('option');
-        option.value = person;
-        option.textContent = person;
-        paidBy.appendChild(option);
-
-        const label = document.createElement('label');
-        label.className = 'check-row';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = person;
-        checkbox.checked = true;
-        const span = document.createElement('span');
-        span.textContent = person;
-        label.appendChild(checkbox);
-        label.appendChild(span);
-        splitBox.appendChild(label);
-    });
 }
 
 function renderTripSummary(trip) {
@@ -367,63 +280,25 @@ function renderTripSummary(trip) {
         return;
     }
     const total = trip.expenses.reduce((sum, item) => sum + item.amount, 0);
+    const remaining = trip.budget > 0 ? trip.budget - total : null;
     const totalCard = document.createElement('div');
     totalCard.className = 'card summary-card';
     const title = document.createElement('strong');
     title.textContent = trip.name;
+    const amount = document.createElement('div');
+    amount.className = `summary-amount${remaining !== null && remaining < 0 ? ' negative-text' : ''}`;
+    amount.textContent = remaining !== null
+        ? `${formatCurrencyAmount(remaining, trip.baseCurrency)} maradt`
+        : `${formatCurrencyAmount(total, trip.baseCurrency)} költés`;
     const meta = document.createElement('div');
     meta.className = 'stat-remaining';
-    meta.textContent = `${formatCurrencyAmount(total, trip.currency)} összes közös költés · ${trip.people.length} résztvevő`;
+    meta.textContent = trip.budget > 0
+        ? `${formatCurrencyAmount(total, trip.baseCurrency)} költés · ${formatCurrencyAmount(trip.budget, trip.baseCurrency)} keret`
+        : `${trip.baseCurrency} tárca · nincs megadott keret`;
     totalCard.appendChild(title);
+    totalCard.appendChild(amount);
     totalCard.appendChild(meta);
     box.appendChild(totalCard);
-
-    const balances = calculateTripBalances(trip);
-    const balanceCard = document.createElement('div');
-    balanceCard.className = 'card';
-    const balanceTitle = document.createElement('strong');
-    balanceTitle.textContent = 'Egyenlegek';
-    balanceCard.appendChild(balanceTitle);
-    Object.entries(balances).forEach(([person, balance]) => {
-        const row = document.createElement('div');
-        row.className = 'settlement-row';
-        const name = document.createElement('span');
-        name.textContent = person;
-        const value = document.createElement('span');
-        value.textContent = balance >= 0
-            ? `kap: ${formatCurrencyAmount(balance, trip.currency)}`
-            : `tartozik: ${formatCurrencyAmount(Math.abs(balance), trip.currency)}`;
-        row.appendChild(name);
-        row.appendChild(value);
-        balanceCard.appendChild(row);
-    });
-    box.appendChild(balanceCard);
-
-    const settlements = calculateTripSettlements(trip);
-    const settlementCard = document.createElement('div');
-    settlementCard.className = 'card';
-    const settlementTitle = document.createElement('strong');
-    settlementTitle.textContent = 'Legegyszerűbb rendezés';
-    settlementCard.appendChild(settlementTitle);
-    if (!settlements.length) {
-        const done = document.createElement('div');
-        done.className = 'period-label';
-        done.textContent = 'Mindenki rendezve van.';
-        settlementCard.appendChild(done);
-    } else {
-        settlements.forEach(item => {
-            const row = document.createElement('div');
-            row.className = 'settlement-row';
-            const text = document.createElement('span');
-            text.textContent = `${item.from} → ${item.to}`;
-            const amount = document.createElement('span');
-            amount.textContent = formatCurrencyAmount(item.amount, trip.currency);
-            row.appendChild(text);
-            row.appendChild(amount);
-            settlementCard.appendChild(row);
-        });
-    }
-    box.appendChild(settlementCard);
 }
 
 function renderTripExpenses(trip) {
@@ -433,28 +308,132 @@ function renderTripExpenses(trip) {
     if (!trip || !trip.expenses.length) {
         const row = document.createElement('tr');
         const cell = document.createElement('td');
-        cell.colSpan = 5;
-        cell.textContent = 'Nincs közös költés.';
+        cell.colSpan = 6;
+        cell.textContent = 'Nincs utazós költés.';
         row.appendChild(cell);
         body.appendChild(row);
         return;
     }
     trip.expenses.slice().reverse().forEach(expense => {
         const row = document.createElement('tr');
+        if (editingTripExpenseId === expense.id) {
+            const editCell = document.createElement('td');
+            editCell.colSpan = 6;
+            editCell.appendChild(renderTripExpenseEditForm(trip, expense));
+            row.appendChild(editCell);
+            body.appendChild(row);
+            return;
+        }
         [
             expense.date,
-            expense.description || '-',
-            formatCurrencyAmount(expense.amount, trip.currency),
-            expense.paidBy,
-            expense.splitBetween.join('; ')
+            expense.category || '-',
+            expense.amount,
+            expense.currency,
+            expense.note || '-'
         ].forEach((value, index) => {
             const cell = document.createElement('td');
             cell.textContent = value;
-            if (index === 1 || index === 4) { cell.className = 'desc'; }
+            if (index === 4) { cell.className = 'desc'; }
             row.appendChild(cell);
         });
+        const actions = document.createElement('td');
+        actions.className = 'table-actions';
+        const buttons = document.createElement('div');
+        buttons.className = 'table-action-buttons';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'edit-btn';
+        edit.textContent = 'Szerk.';
+        edit.addEventListener('click', () => {
+            editingTripExpenseId = expense.id;
+            renderTrips();
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'delete-btn';
+        del.textContent = 'Törlés';
+        del.addEventListener('click', () => deleteTripExpense(expense.id));
+        buttons.appendChild(edit);
+        buttons.appendChild(del);
+        actions.appendChild(buttons);
+        row.appendChild(actions);
         body.appendChild(row);
     });
+}
+
+function renderTripExpenseEditForm(trip, expense) {
+    const form = document.createElement('form');
+    form.className = 'expense-edit-form';
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        saveTripExpenseEdit(expense.id);
+    });
+
+    const date = document.createElement('input');
+    date.type = 'date';
+    date.value = expense.date;
+    date.dataset.tripEditId = expense.id;
+    date.dataset.field = 'date';
+
+    const category = document.createElement('select');
+    category.dataset.tripEditId = expense.id;
+    category.dataset.field = 'category';
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat.name;
+        option.textContent = cat.name;
+        category.appendChild(option);
+    });
+    if (expense.category && !categories.some(cat => cat.name === expense.category)) {
+        const option = document.createElement('option');
+        option.value = expense.category;
+        option.textContent = expense.category;
+        category.appendChild(option);
+    }
+    category.value = expense.category || categories[0]?.name || '';
+
+    const amount = document.createElement('input');
+    amount.type = 'number';
+    amount.min = '0.01';
+    amount.step = '0.01';
+    amount.inputMode = 'decimal';
+    amount.value = expense.amount;
+    amount.dataset.tripEditId = expense.id;
+    amount.dataset.field = 'amount';
+
+    const currency = document.createElement('input');
+    currency.type = 'text';
+    currency.maxLength = 6;
+    currency.value = expense.currency || trip.baseCurrency;
+    currency.dataset.tripEditId = expense.id;
+    currency.dataset.field = 'currency';
+
+    const note = document.createElement('input');
+    note.type = 'text';
+    note.value = expense.note || '';
+    note.placeholder = 'Megjegyzés';
+    note.dataset.tripEditId = expense.id;
+    note.dataset.field = 'note';
+
+    const actions = document.createElement('div');
+    actions.className = 'edit-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'small-btn';
+    cancel.textContent = 'Mégse';
+    cancel.addEventListener('click', () => {
+        editingTripExpenseId = '';
+        renderTrips();
+    });
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'small-btn primary-small';
+    save.textContent = 'Mentés';
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+
+    [category, amount, note, currency, date, actions].forEach(el => form.appendChild(el));
+    return form;
 }
 
 function renderTrips() {
@@ -465,7 +444,7 @@ function renderTrips() {
         localStorage.setItem(STORAGE_CURRENT_TRIP, currentTripId);
     }
     renderTripSelect();
-    renderTripPeople(trip);
+    populateCategorySelect(document.getElementById('trip-category'), { placeholder: 'Válassz kategóriát' });
     renderTripExpenseForm(trip);
     renderTripSummary(trip);
     renderTripExpenses(trip);
@@ -474,72 +453,101 @@ function renderTrips() {
 function createTrip() {
     const nameField = document.getElementById('trip-name');
     const currencyField = document.getElementById('trip-currency');
-    const peopleField = document.getElementById('trip-people');
+    const budgetField = document.getElementById('trip-budget');
+    if (!nameField || !currencyField) { return; }
     const name = nameField.value.trim();
-    const currency = currencyField.value.trim().toUpperCase();
-    const people = normalizePeople(peopleField.value.split(','));
+    const baseCurrency = normalizeCurrency(currencyField.value, 'HUF');
+    const budget = parseOptionalPositiveNumber(budgetField?.value) || 0;
     if (!name) { alert('Add meg az utazás nevét!'); return; }
-    if (!currency) { alert('Add meg a pénznemet!'); return; }
-    if (people.length < 2) { alert('Adj meg legalább két résztvevőt vesszővel elválasztva.'); return; }
     if (trips.some(trip => trip.name.toLowerCase() === name.toLowerCase())) {
-        alert('Ilyen nevű utazás már létezik.');
+        alert('Ilyen nevű tárca már létezik.');
         return;
     }
-    const trip = { id: generateId().replace('w_', 't_'), name, currency, people, expenses: [] };
+    const trip = { id: generateId().replace('w_', 't_'), name, baseCurrency, budget, expenses: [] };
     trips.push(trip);
     currentTripId = trip.id;
     persistTrips();
     localStorage.setItem(STORAGE_CURRENT_TRIP, currentTripId);
     nameField.value = '';
     currencyField.value = '';
-    peopleField.value = '';
+    if (budgetField) { budgetField.value = ''; }
+    document.getElementById('trip-create-panel')?.removeAttribute('open');
     renderTrips();
-    showMessage('Utazás létrehozva.');
-}
-
-function addTripPerson() {
-    const trip = getCurrentTrip();
-    if (!trip) { alert('Előbb hozz létre egy utazást.'); return; }
-    const field = document.getElementById('trip-new-person');
-    const name = field.value.trim();
-    if (!name) { alert('Add meg a résztvevő nevét!'); return; }
-    if (trip.people.some(person => person.toLowerCase() === name.toLowerCase())) {
-        alert('Ez a résztvevő már szerepel.');
-        return;
-    }
-    trip.people.push(name);
-    persistTrips();
-    field.value = '';
-    renderTrips();
-    showMessage('Résztvevő hozzáadva.');
+    showMessage('Tárca létrehozva.');
 }
 
 function addTripExpense() {
     const trip = getCurrentTrip();
     if (!trip) { alert('Előbb hozz létre egy utazást.'); return; }
     const dateField = document.getElementById('trip-date');
-    const descField = document.getElementById('trip-description');
     const amountField = document.getElementById('trip-amount');
-    const paidByField = document.getElementById('trip-paid-by');
+    const currencyField = document.getElementById('trip-expense-currency');
+    const categoryField = document.getElementById('trip-category');
+    const noteField = document.getElementById('trip-note');
     const amount = parsePositiveNumber(amountField.value);
-    const splitBetween = Array.from(document.querySelectorAll('#trip-split-between input[type="checkbox"]:checked'))
-        .map(input => input.value);
+    const currency = normalizeCurrency(currencyField.value, trip.baseCurrency);
     if (amount === null) { alert('Add meg a pozitív összeget!'); return; }
-    if (!paidByField.value) { alert('Válaszd ki, ki fizette.'); return; }
-    if (!splitBetween.length) { alert('Válaszd ki, kik között oszlik meg.'); return; }
+    const category = categoryField.value;
+    if (!category) { alert('Adj meg kategóriát!'); return; }
     trip.expenses.push({
         id: generateId().replace('w_', 'e_'),
         date: dateField.value || formatLocalDate(new Date()),
-        description: descField.value.trim(),
+        description: noteField.value.trim(),
         amount,
-        paidBy: paidByField.value,
-        splitBetween
+        currency,
+        category,
+        note: noteField.value.trim()
     });
     persistTrips();
-    descField.value = '';
     amountField.value = '';
+    categoryField.value = '';
+    noteField.value = '';
+    currencyField.value = '';
     renderTrips();
-    showMessage('Közös költés hozzáadva.');
+    vibrateSuccess();
+    showMessage('Utazós költés hozzáadva.');
+}
+
+function getTripExpenseField(id, field) {
+    return document.querySelector(`[data-trip-edit-id="${id}"][data-field="${field}"]`);
+}
+
+function saveTripExpenseEdit(id) {
+    const trip = getCurrentTrip();
+    if (!trip) { return; }
+    const expense = trip.expenses.find(item => item.id === id);
+    if (!expense) { return; }
+    const amount = parsePositiveNumber(getTripExpenseField(id, 'amount')?.value);
+    const date = getTripExpenseField(id, 'date')?.value || '';
+    if (!parseLocalDate(date)) { alert('Adj meg érvényes dátumot!'); return; }
+    if (amount === null) { alert('Add meg a pozitív összeget!'); return; }
+    const category = getTripExpenseField(id, 'category')?.value || '';
+    if (!category) { alert('Adj meg kategóriát!'); return; }
+    expense.date = date;
+    expense.description = getTripExpenseField(id, 'note')?.value.trim() || '';
+    expense.amount = amount;
+    expense.currency = normalizeCurrency(getTripExpenseField(id, 'currency')?.value, trip.baseCurrency);
+    expense.category = category;
+    expense.note = getTripExpenseField(id, 'note')?.value.trim() || '';
+    editingTripExpenseId = '';
+    persistTrips();
+    renderTrips();
+    vibrateSuccess();
+    showMessage('Utazós költés mentve.');
+}
+
+function deleteTripExpense(id) {
+    const trip = getCurrentTrip();
+    if (!trip) { return; }
+    const expense = trip.expenses.find(item => item.id === id);
+    if (!expense) { return; }
+    const label = `${expense.description || 'Költés'} · ${formatCurrencyAmount(expense.amount, expense.currency)}`;
+    if (!window.confirm(`Biztos törlöd ezt az utazós költést?\n${label}`)) { return; }
+    trip.expenses = trip.expenses.filter(item => item.id !== id);
+    if (editingTripExpenseId === id) { editingTripExpenseId = ''; }
+    persistTrips();
+    renderTrips();
+    showMessage('Utazós költés törölve.');
 }
 
 function exportTripCSV() {
@@ -547,36 +555,23 @@ function exportTripCSV() {
     if (!trip) { alert('Nincs exportálható utazás.'); return; }
     const expenseLines = [
         'Expenses',
-        'Trip,Date,Description,Amount,Currency,PaidBy,SplitBetween',
+        'Trip,Date,Category,Amount,Currency,Note',
         ...trip.expenses.map(item => [
             csvEscape(trip.name),
             csvEscape(item.date),
-            csvEscape(item.description),
+            csvEscape(item.category),
             csvEscape(item.amount),
-            csvEscape(trip.currency),
-            csvEscape(item.paidBy),
-            csvEscape(item.splitBetween.join(';'))
+            csvEscape(item.currency),
+            csvEscape(item.note)
         ].join(','))
     ];
-    const settlements = calculateTripSettlements(trip);
-    const settlementLines = [
-        '',
-        'Settlement',
-        'From,To,Amount,Currency',
-        ...settlements.map(item => [
-            csvEscape(item.from),
-            csvEscape(item.to),
-            csvEscape(item.amount),
-            csvEscape(trip.currency)
-        ].join(','))
-    ];
-    const csv = [...expenseLines, ...settlementLines].join('\n');
+    const csv = expenseLines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const safeName = trip.name.toLowerCase().replace(/[^a-z0-9áéíóöőúüű-]+/gi, '-').replace(/^-|-$/g, '') || 'utazas';
     a.href = url;
-    a.download = `${safeName}-${trip.currency}.csv`;
+    a.download = `${safeName}-${trip.baseCurrency}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -586,20 +581,7 @@ function exportTripCSV() {
 function setupTripEvents() {
     const select = document.getElementById('trip-select');
     if (select) { select.addEventListener('change', () => setCurrentTrip(select.value)); }
-    const createForm = document.getElementById('trip-create-form');
-    if (createForm) {
-        createForm.addEventListener('submit', event => {
-            event.preventDefault();
-            createTrip();
-        });
-    }
-    const personForm = document.getElementById('trip-person-form');
-    if (personForm) {
-        personForm.addEventListener('submit', event => {
-            event.preventDefault();
-            addTripPerson();
-        });
-    }
+    document.getElementById('trip-create-submit')?.addEventListener('click', createTrip);
     const expenseForm = document.getElementById('trip-expense-form');
     if (expenseForm) {
         expenseForm.addEventListener('submit', event => {
@@ -620,6 +602,7 @@ let trips = loadTrips();
 let currentTripId = loadCurrentTripId(trips);
 let expandedStats = {};
 let editingExpenseId = '';
+let editingTripExpenseId = '';
 
 function setCurrentWallet(id) {
     if (!wallets.some(wallet => wallet.id === id)) { return; }
@@ -848,8 +831,8 @@ function renderStats(containerId, range, getLimit, options = {}) {
     });
 }
 
-function renderCategorySelect() {
-    const select = document.getElementById('category-select');
+function populateCategorySelect(select, options = {}) {
+    if (!select) { return; }
     select.innerHTML = '';
     if (!categories.length) {
         const option = document.createElement('option');
@@ -860,18 +843,26 @@ function renderCategorySelect() {
         return;
     }
     select.disabled = false;
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Válassz kategóriát';
-    placeholder.selected = true;
-    placeholder.disabled = true;
-    select.appendChild(placeholder);
+    if (options.placeholder) {
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = options.placeholder;
+        placeholder.selected = !options.value;
+        placeholder.disabled = true;
+        select.appendChild(placeholder);
+    }
     categories.forEach(cat => {
         const option = document.createElement('option');
         option.value = cat.name;
         option.textContent = cat.name;
         select.appendChild(option);
     });
+    if (options.value) { select.value = options.value; }
+}
+
+function renderCategorySelect() {
+    populateCategorySelect(document.getElementById('category-select'), { placeholder: 'Válassz kategóriát' });
+    populateCategorySelect(document.getElementById('trip-category'), { placeholder: 'Válassz kategóriát' });
 }
 
 function renderSettings() {
@@ -976,17 +967,30 @@ function setupExpenseForm() {
         event.preventDefault();
         addExpense();
     });
+    function toggleForm(targetForm, focusSelector, openLabel, closeLabel) {
+        targetForm.classList.toggle('collapsed');
+        const isCollapsed = targetForm.classList.contains('collapsed');
+        const toggle = document.getElementById('expense-toggle');
+        if (toggle) {
+            toggle.textContent = isCollapsed ? '+' : '×';
+            toggle.setAttribute('aria-label', isCollapsed ? openLabel : closeLabel);
+        }
+        if (!isCollapsed) {
+            targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            window.setTimeout(() => document.querySelector(focusSelector)?.focus(), 250);
+        }
+    }
     const toggle = document.getElementById('expense-toggle');
     if (toggle) {
         toggle.addEventListener('click', () => {
-            form.classList.toggle('collapsed');
-            const isCollapsed = form.classList.contains('collapsed');
-            toggle.textContent = isCollapsed ? '+' : '×';
-            toggle.setAttribute('aria-label', isCollapsed ? 'Új kiadás' : 'Kiadás bezárása');
-            if (!isCollapsed) {
-                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                window.setTimeout(() => document.getElementById('category-select')?.focus(), 250);
+            if (document.getElementById('view-trips')?.classList.contains('active')) {
+                const tripForm = document.getElementById('trip-expense-form');
+                if (tripForm) {
+                    toggleForm(tripForm, '#trip-category', 'Új utazós költés', 'Utazós költés bezárása');
+                }
+                return;
             }
+            toggleForm(form, '#category-select', 'Új kiadás', 'Kiadás bezárása');
         });
     }
 }
@@ -1177,6 +1181,111 @@ function csvEscape(value) {
     return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
+function parseCSV(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let inQuotes = false;
+    const input = text.replace(/^\uFEFF/, '');
+    for (let i = 0; i < input.length; i += 1) {
+        const char = input[i];
+        const next = input[i + 1];
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                value += '"';
+                i += 1;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            row.push(value);
+            value = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') { i += 1; }
+            row.push(value);
+            if (row.some(cell => cell !== '')) { rows.push(row); }
+            row = [];
+            value = '';
+        } else {
+            value += char;
+        }
+    }
+    row.push(value);
+    if (row.some(cell => cell !== '')) { rows.push(row); }
+    return rows;
+}
+
+function normalizeCSVHeader(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function parseImportDate(value) {
+    const raw = String(value || '').trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso && parseLocalDate(raw)) { return raw; }
+    const dotted = raw.match(/^(\d{4})\.\s*(\d{2})\.\s*(\d{2})\.?$/);
+    if (dotted) {
+        const formatted = `${dotted[1]}-${dotted[2]}-${dotted[3]}`;
+        if (parseLocalDate(formatted)) { return formatted; }
+    }
+    return null;
+}
+
+function importMainCSVRows(rows) {
+    if (rows.length < 2) { return 0; }
+    updateCurrentWallet();
+    const headers = rows[0].map(normalizeCSVHeader);
+    const indexOf = name => headers.indexOf(name);
+    const dateIndex = indexOf('date');
+    const amountIndex = indexOf('amount');
+    const categoryIndex = indexOf('category');
+    const descriptionIndex = indexOf('description');
+    const walletIndex = indexOf('wallet');
+    const idIndex = indexOf('id');
+    if (dateIndex < 0 || amountIndex < 0 || categoryIndex < 0) { return 0; }
+
+    const existingIds = new Set(currentWallet.expenses.map(item => item.id).filter(Boolean));
+    let imported = 0;
+    rows.slice(1).forEach(row => {
+        const wallet = walletIndex >= 0 ? String(row[walletIndex] || '').trim().toLowerCase() : 'main';
+        if (wallet && wallet !== 'main' && wallet !== currentWallet.name.toLowerCase()) { return; }
+        const date = parseImportDate(row[dateIndex]);
+        const amount = parseNonNegativeInt(row[amountIndex]);
+        const cat = String(row[categoryIndex] || '').trim();
+        if (!date || !amount || !cat) { return; }
+        const importedId = idIndex >= 0 ? String(row[idIndex] || '').trim() : '';
+        if (importedId && existingIds.has(importedId)) { return; }
+        const id = importedId || generateId().replace('w_', 'x_');
+        existingIds.add(id);
+        currentWallet.expenses.push({
+            id,
+            date,
+            cat,
+            amount,
+            note: descriptionIndex >= 0 ? String(row[descriptionIndex] || '').trim() : ''
+        });
+        imported += 1;
+    });
+    if (imported > 0) {
+        persistWallets();
+        renderAll();
+    }
+    return imported;
+}
+
+function importCSVFile(file) {
+    if (!file) { return; }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+        const rows = parseCSV(String(reader.result || ''));
+        const imported = importMainCSVRows(rows);
+        showMessage(imported > 0 ? `${imported} sor importálva.` : 'Nem volt importálható sor.');
+        const input = document.getElementById('csv-import-file');
+        if (input) { input.value = ''; }
+    });
+    reader.readAsText(file);
+}
+
 function formatExportDate(dateStr) {
     const date = parseLocalDate(dateStr) || new Date();
     const y = date.getFullYear();
@@ -1298,7 +1407,9 @@ function switchView(view) {
     }
     const expenseToggle = document.getElementById('expense-toggle');
     if (expenseToggle) {
-        expenseToggle.classList.toggle('hidden', nextView !== 'week');
+        expenseToggle.classList.toggle('hidden', !['week', 'trips'].includes(nextView));
+        expenseToggle.textContent = '+';
+        expenseToggle.setAttribute('aria-label', nextView === 'trips' ? 'Új utazós költés' : 'Új kiadás');
     }
 }
 
@@ -1308,6 +1419,9 @@ function setupSettingsEvents() {
     document.getElementById('export-month')?.addEventListener('click', () => exportCSV('month'));
     document.getElementById('export-all')?.addEventListener('click', () => exportCSV('all'));
     document.getElementById('trips-open')?.addEventListener('click', () => switchView('trips'));
+    document.getElementById('csv-import-file')?.addEventListener('change', event => {
+        importCSVFile(event.target.files?.[0]);
+    });
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
